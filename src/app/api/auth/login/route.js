@@ -7,6 +7,9 @@ import {
 } from '@/lib/auth';
 import User from '@/models/User';
 
+export const runtime = 'nodejs';
+export const dynamic = 'force-dynamic';
+
 export async function POST(request) {
   try {
     await connectDB();

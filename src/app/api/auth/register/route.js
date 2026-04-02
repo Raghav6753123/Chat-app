@@ -8,6 +8,9 @@ import {
 import { ensureStarterConversationForUser } from '@/lib/bootstrap';
 import User from '@/models/User';
 
+export const runtime = 'nodejs';
+export const dynamic = 'force-dynamic';
+
 export async function POST(request) {
   try {
     await connectDB();

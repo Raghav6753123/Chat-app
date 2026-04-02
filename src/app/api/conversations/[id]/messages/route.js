@@ -6,6 +6,7 @@ import { toClockTime } from '@/lib/formatters';
 import Conversation from '@/models/Conversation';
 import ConversationMember from '@/models/ConversationMember';
 import Message from '@/models/Message';
+import { getPusherServer } from '@/lib/pusher-server';
 import User from '@/models/User';
 
 function serializeMessage(message, sender) {
@@ -39,7 +40,7 @@ export async function GET(request, context) {
 
   await connectDB();
 
-  const { id } = context.params;
+  const { id } = await context.params;
   if (!mongoose.Types.ObjectId.isValid(id)) {
     return NextResponse.json({ error: 'Invalid conversation id' }, { status: 400 });
   }
@@ -78,7 +79,7 @@ export async function POST(request, context) {
 
   await connectDB();
 
-  const { id } = context.params;
+  const { id } = await context.params;
   if (!mongoose.Types.ObjectId.isValid(id)) {
     return NextResponse.json({ error: 'Invalid conversation id' }, { status: 400 });
   }
@@ -132,9 +133,22 @@ export async function POST(request, context) {
   );
 
   const sender = await User.findById(authUser._id).lean();
+  const serializedMessage = serializeMessage(message.toObject(), sender);
+
+  const pusherServer = getPusherServer();
+  if (pusherServer) {
+    try {
+      await pusherServer.trigger(`private-conversation-${conversationId.toString()}`, 'new-message', {
+        conversationId: conversationId.toString(),
+        message: serializedMessage,
+      });
+    } catch {
+      // Don't fail message delivery when realtime publish fails.
+    }
+  }
 
   return NextResponse.json(
-    { message: serializeMessage(message.toObject(), sender) },
+    { message: serializedMessage },
     { status: 201 }
   );
 }

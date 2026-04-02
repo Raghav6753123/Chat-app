@@ -6,6 +6,7 @@ import { toast } from 'sonner';
 import ConversationList from './convoList';
 import ChatWindow from './chatWindow';
 import ContactInfoPanel from './contactInfoPAge';
+import { getPusherClient } from '@/lib/pusher-client';
 
 export default function ChatDashboard() {
   const router = useRouter();
@@ -75,6 +76,91 @@ export default function ChatDashboard() {
     c.lastMessage.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
+  const conversationIdList = useMemo(
+    () => conversations.map((conversation) => conversation.id),
+    [conversations]
+  );
+  const conversationIdKey = useMemo(
+    () => [...conversationIdList].sort().join('|'),
+    [conversationIdList]
+  );
+
+  useEffect(() => {
+    if (!currentUser?.id || !conversationIdList.length) {
+      return undefined;
+    }
+
+    const pusherClient = getPusherClient();
+    if (!pusherClient) {
+      return undefined;
+    }
+
+    const subscriptions = conversationIdList.map((conversationId) => {
+      const channelName = `private-conversation-${conversationId}`;
+      const channel = pusherClient.subscribe(channelName);
+
+      const onIncomingMessage = (payload) => {
+        const incomingConversationId = payload?.conversationId;
+        const incomingMessage = payload?.message;
+
+        if (!incomingConversationId || !incomingMessage?.id) {
+          return;
+        }
+
+        setMessagesByConversation((prev) => {
+          const existing = prev[incomingConversationId] || [];
+          if (existing.some((message) => message.id === incomingMessage.id)) {
+            return prev;
+          }
+
+          return {
+            ...prev,
+            [incomingConversationId]: [...existing, incomingMessage],
+          };
+        });
+
+        setConversations((prev) =>
+          prev.map((conversation) => {
+            if (conversation.id !== incomingConversationId) {
+              return conversation;
+            }
+
+            const isFromCurrentUser = incomingMessage.senderId === currentUser.id;
+            let unreadCount = conversation.unreadCount || 0;
+
+            if (activeConversationId === incomingConversationId) {
+              unreadCount = 0;
+            } else if (!isFromCurrentUser) {
+              unreadCount += 1;
+            }
+
+            return {
+              ...conversation,
+              lastMessage: incomingMessage.text || incomingMessage.type,
+              lastMessageTime: incomingMessage.timestamp,
+              unreadCount,
+            };
+          })
+        );
+      };
+
+      channel.bind('new-message', onIncomingMessage);
+
+      return {
+        channelName,
+        channel,
+        onIncomingMessage,
+      };
+    });
+
+    return () => {
+      subscriptions.forEach(({ channelName, channel, onIncomingMessage }) => {
+        channel.unbind('new-message', onIncomingMessage);
+        pusherClient.unsubscribe(channelName);
+      });
+    };
+  }, [activeConversationId, conversationIdKey, conversationIdList, currentUser?.id]);
+
   const handleSelectConversation = async (conversationId) => {
     setActiveConversationId(conversationId);
     setShowInfoPanel(false);
@@ -88,6 +174,17 @@ export default function ChatDashboard() {
       const data = await response.json();
 
       if (!response.ok) {
+        if (response.status === 404) {
+          setConversations((prev) => prev.filter((conversation) => conversation.id !== conversationId));
+          setMessagesByConversation((prev) => {
+            const next = { ...prev };
+            delete next[conversationId];
+            return next;
+          });
+          setActiveConversationId(null);
+          setShowInfoPanel(false);
+          toast.error('This conversation is no longer available.');
+        }
         return;
       }
 
@@ -108,10 +205,28 @@ export default function ChatDashboard() {
     }
   };
 
+  const handleConversationUnavailable = (conversationId) => {
+    setConversations((prev) => prev.filter((conversation) => conversation.id !== conversationId));
+    setMessagesByConversation((prev) => {
+      const next = { ...prev };
+      delete next[conversationId];
+      return next;
+    });
+
+    if (activeConversationId === conversationId) {
+      setActiveConversationId(null);
+      setShowInfoPanel(false);
+    }
+
+    toast.error('This conversation is no longer available.');
+  };
+
   const handleMessageSent = (conversationId, message) => {
     setMessagesByConversation((prev) => ({
       ...prev,
-      [conversationId]: [...(prev[conversationId] || []), message],
+      [conversationId]: (prev[conversationId] || []).some((existing) => existing.id === message.id)
+        ? prev[conversationId]
+        : [...(prev[conversationId] || []), message],
     }));
 
     setConversations((prev) =>
@@ -193,12 +308,51 @@ export default function ChatDashboard() {
     setCurrentUser(nextUser);
   };
 
+  const handleConversationPreferencesUpdated = (conversationId, preferences) => {
+    setConversations((prev) => {
+      const next = prev.map((conversation) =>
+        conversation.id === conversationId
+          ? {
+              ...conversation,
+              isMuted:
+                typeof preferences.isMuted === 'boolean'
+                  ? preferences.isMuted
+                  : conversation.isMuted,
+              isPinned:
+                typeof preferences.isPinned === 'boolean'
+                  ? preferences.isPinned
+                  : conversation.isPinned,
+            }
+          : conversation
+      );
+
+      return [...next].sort((a, b) => {
+        if (a.isPinned === b.isPinned) return 0;
+        return a.isPinned ? -1 : 1;
+      });
+    });
+  };
+
+  const handleConversationRemoved = (conversationId) => {
+    setConversations((prev) => prev.filter((conversation) => conversation.id !== conversationId));
+    setMessagesByConversation((prev) => {
+      const next = { ...prev };
+      delete next[conversationId];
+      return next;
+    });
+
+    if (activeConversationId === conversationId) {
+      setActiveConversationId(null);
+      setShowInfoPanel(false);
+    }
+  };
+
   return (
     <div className="h-screen flex bg-slate-50 overflow-hidden font-sans antialiased selection:bg-sky-200 selection:text-sky-900 transition-colors duration-300">
       <Toaster position="bottom-right" richColors toastOptions={{ className: 'rounded-xl shadow-lg border-0 bg-white/90 backdrop-blur-sm' }} />
 
       {/* Left â€” Conversation list */}
-      <div className="w-80 xl:w-96 flex-shrink-0 bg-white shadow-[1px_0_10px_-5px_rgba(0,0,0,0.1)] border-r border-slate-100 flex flex-col h-full z-10 transition-transform duration-300">
+      <div className="w-80 xl:w-96 shrink-0 bg-white shadow-[1px_0_10px_-5px_rgba(0,0,0,0.1)] border-r border-slate-100 flex flex-col h-full z-10 transition-transform duration-300">
         <ConversationList
           conversations={filteredConversations}
           activeId={activeConversationId}
@@ -227,6 +381,7 @@ export default function ChatDashboard() {
             currentUserId={currentUser?.id}
             onToggleInfo={() => setShowInfoPanel(!showInfoPanel)}
             onMessageSent={handleMessageSent}
+            onConversationUnavailable={handleConversationUnavailable}
             showInfo={showInfoPanel}
           />
         ) : (
@@ -241,9 +396,11 @@ export default function ChatDashboard() {
 
       {/* Right — Info panel */}
       {showInfoPanel && activeConversation && (
-        <div className="w-72 xl:w-80 flex-shrink-0 bg-white border-l border-gray-100 flex flex-col h-full">
+        <div className="w-72 xl:w-80 shrink-0 bg-white border-l border-gray-100 flex flex-col h-full">
           <ContactInfoPanel
             conversation={activeConversation}
+            onPreferencesUpdated={handleConversationPreferencesUpdated}
+            onConversationRemoved={handleConversationRemoved}
             onClose={() => setShowInfoPanel(false)}
           />
         </div>

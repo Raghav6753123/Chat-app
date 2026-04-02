@@ -18,7 +18,7 @@ export async function GET(request, context) {
 
   await connectDB();
 
-  const { id } = context.params;
+  const { id } = await context.params;
   if (!mongoose.Types.ObjectId.isValid(id)) {
     return NextResponse.json({ error: 'Invalid conversation id' }, { status: 400 });
   }
@@ -62,7 +62,7 @@ export async function POST(request, context) {
 
   await connectDB();
 
-  const { id } = context.params;
+  const { id } = await context.params;
   if (!mongoose.Types.ObjectId.isValid(id)) {
     return NextResponse.json({ error: 'Invalid conversation id' }, { status: 400 });
   }
@@ -132,7 +132,7 @@ export async function DELETE(request, context) {
 
   await connectDB();
 
-  const { id } = context.params;
+  const { id } = await context.params;
   if (!mongoose.Types.ObjectId.isValid(id)) {
     return NextResponse.json({ error: 'Invalid conversation id' }, { status: 400 });
   }
@@ -172,4 +172,52 @@ export async function DELETE(request, context) {
   await conversation.save();
 
   return NextResponse.json({ ok: true });
+}
+
+export async function PATCH(request, context) {
+  const authUser = await getAuthUserFromRequest(request);
+  if (!authUser) {
+    return unauthorizedResponse();
+  }
+
+  await connectDB();
+
+  const { id } = await context.params;
+  if (!mongoose.Types.ObjectId.isValid(id)) {
+    return NextResponse.json({ error: 'Invalid conversation id' }, { status: 400 });
+  }
+
+  const conversationId = new mongoose.Types.ObjectId(id);
+  const membership = await requireMembership(conversationId, authUser._id);
+  if (!membership) {
+    return NextResponse.json({ error: 'Conversation not found' }, { status: 404 });
+  }
+
+  const body = await request.json();
+  const updates = {};
+
+  if (typeof body.isMuted === 'boolean') {
+    updates.isMuted = body.isMuted;
+  }
+
+  if (typeof body.isPinned === 'boolean') {
+    updates.isPinned = body.isPinned;
+  }
+
+  if (!Object.keys(updates).length) {
+    return NextResponse.json({ error: 'No valid preference updates provided' }, { status: 400 });
+  }
+
+  const updated = await ConversationMember.findByIdAndUpdate(
+    membership._id,
+    { $set: updates },
+    { new: true }
+  ).lean();
+
+  return NextResponse.json({
+    preferences: {
+      isMuted: Boolean(updated.isMuted),
+      isPinned: Boolean(updated.isPinned),
+    },
+  });
 }

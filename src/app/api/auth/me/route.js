@@ -3,6 +3,9 @@ import { connectDB } from '@/lib/db';
 import { getAuthUserFromRequest, unauthorizedResponse } from '@/lib/auth';
 import User from '@/models/User';
 
+export const runtime = 'nodejs';
+export const dynamic = 'force-dynamic';
+
 function serializeUser(user) {
   return {
     id: user._id.toString(),

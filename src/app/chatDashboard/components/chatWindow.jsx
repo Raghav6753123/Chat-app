@@ -19,18 +19,32 @@ import {
 import { toast } from 'sonner';
 
 const EMOJI_LIST = [':)', '<3', ':D', ';)', ':P', 'XD', ':(', ':|'];
+const MAX_UPLOAD_BYTES = 10 * 1024 * 1024;
+const ALLOWED_IMAGE_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp', 'image/gif']);
+const ALLOWED_FILE_TYPES = new Set([
+  'application/pdf',
+  'text/plain',
+  'application/msword',
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  'application/vnd.ms-excel',
+  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+]);
 
 export default function ChatWindow({
   conversation,
   currentUserId,
   onToggleInfo,
   onMessageSent,
+  onConversationUnavailable,
   showInfo,
 }) {
   const [inputText, setInputText] = useState('');
   const [showEmoji, setShowEmoji] = useState(false);
+  const [isUploading, setIsUploading] = useState(false);
   const messagesEndRef = useRef(null);
   const inputRef = useRef(null);
+  const imageInputRef = useRef(null);
+  const fileInputRef = useRef(null);
 
   const messages = useMemo(() => conversation.messages || [], [conversation.messages]);
 
@@ -55,6 +69,10 @@ export default function ChatWindow({
       const payload = await response.json();
 
       if (!response.ok) {
+        if (response.status === 404) {
+          onConversationUnavailable?.(conversation.id);
+          return;
+        }
         toast.error(payload.error || 'Failed to send message');
         return;
       }
@@ -63,6 +81,102 @@ export default function ChatWindow({
     } catch {
       toast.error('Unable to send message right now.');
     }
+  };
+
+  const formatFileSize = (bytes) => {
+    if (!bytes || Number.isNaN(bytes)) return '';
+    if (bytes < 1024) return `${bytes} B`;
+    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+  };
+
+  const uploadAndSendAttachment = async (file, type) => {
+    if (!file) return;
+
+    setIsUploading(true);
+
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+
+      const uploadResponse = await fetch('/api/uploads', {
+        method: 'POST',
+        body: formData,
+      });
+
+      const uploadPayload = await uploadResponse.json();
+
+      if (!uploadResponse.ok) {
+        toast.error(uploadPayload.error || 'Upload failed');
+        return;
+      }
+
+      const messageResponse = await fetch(`/api/conversations/${conversation.id}/messages`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          type,
+          text: '',
+          fileUrl: uploadPayload.url,
+          fileName: uploadPayload.fileName,
+          fileSize: formatFileSize(uploadPayload.sizeBytes),
+        }),
+      });
+
+      const messagePayload = await messageResponse.json();
+
+      if (!messageResponse.ok) {
+        if (messageResponse.status === 404) {
+          onConversationUnavailable?.(conversation.id);
+          return;
+        }
+        toast.error(messagePayload.error || 'Failed to send attachment');
+        return;
+      }
+
+      onMessageSent?.(conversation.id, messagePayload.message);
+      toast.success(type === 'image' ? 'Photo sent' : 'Document sent');
+    } catch {
+      toast.error('Unable to upload attachment right now.');
+    } finally {
+      setIsUploading(false);
+    }
+  };
+
+  const handleSelectImage = async (event) => {
+    const file = event.target.files?.[0];
+    event.target.value = '';
+    if (!file) return;
+
+    if (!ALLOWED_IMAGE_TYPES.has(file.type)) {
+      toast.error('Only JPG, PNG, WEBP, or GIF images are allowed');
+      return;
+    }
+
+    if (file.size > MAX_UPLOAD_BYTES) {
+      toast.error('Image exceeds 10MB limit');
+      return;
+    }
+
+    await uploadAndSendAttachment(file, 'image');
+  };
+
+  const handleSelectFile = async (event) => {
+    const file = event.target.files?.[0];
+    event.target.value = '';
+    if (!file) return;
+
+    if (!ALLOWED_FILE_TYPES.has(file.type)) {
+      toast.error('Unsupported document type');
+      return;
+    }
+
+    if (file.size > MAX_UPLOAD_BYTES) {
+      toast.error('Document exceeds 10MB limit');
+      return;
+    }
+
+    await uploadAndSendAttachment(file, 'file');
   };
 
   const handleKeyDown = (e) => {
@@ -213,7 +327,21 @@ export default function ChatWindow({
 
       <div className="bg-white border-t border-gray-100 px-4 py-3 flex items-center gap-2 flex-shrink-0">
         <div className="relative group">
+          <input
+            ref={imageInputRef}
+            type="file"
+            accept="image/*"
+            className="hidden"
+            onChange={handleSelectImage}
+          />
+          <input
+            ref={fileInputRef}
+            type="file"
+            className="hidden"
+            onChange={handleSelectFile}
+          />
           <button
+            disabled={isUploading}
             className="w-9 h-9 flex items-center justify-center rounded-xl text-gray-400 hover:bg-gray-100 hover:text-sky-600 transition-all duration-150"
             title="Attach file"
           >
@@ -221,14 +349,14 @@ export default function ChatWindow({
           </button>
           <div className="absolute bottom-12 left-0 bg-white border border-gray-100 rounded-xl shadow-lg p-1 hidden group-hover:flex flex-col gap-0.5 w-36 z-10">
             <button
-              onClick={() => toast.info('Photo sharing coming soon')}
+              onClick={() => imageInputRef.current?.click()}
               className="flex items-center gap-2.5 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 rounded-lg transition-colors"
             >
               <ImageIcon size={15} className="text-sky-500" />
               Photo
             </button>
             <button
-              onClick={() => toast.info('File sharing coming soon')}
+              onClick={() => fileInputRef.current?.click()}
               className="flex items-center gap-2.5 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 rounded-lg transition-colors"
             >
               <FileText size={15} className="text-emerald-500" />
@@ -269,11 +397,18 @@ export default function ChatWindow({
           </button>
         ) : (
           <button
-            onClick={() => toast.info('Voice recording coming soon')}
+            onClick={() => (isUploading ? null : toast.info('Voice recording coming soon'))}
             className="w-10 h-10 flex items-center justify-center rounded-xl text-gray-400 hover:bg-gray-100 hover:text-sky-600 transition-all duration-150 flex-shrink-0"
-            title="Record voice message"
+            title={isUploading ? 'Uploading...' : 'Record voice message'}
           >
-            <Mic size={19} />
+            {isUploading ? (
+              <svg className="animate-spin w-4 h-4 text-sky-500" fill="none" viewBox="0 0 24 24">
+                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+              </svg>
+            ) : (
+              <Mic size={19} />
+            )}
           </button>
         )}
       </div>
@@ -313,7 +448,19 @@ function MessageBubble({
           <p className="text-xs font-600 text-sky-600 px-1">{senderName}</p>
         )}
 
-        {message.type === 'file' ? (
+        {message.type === 'image' ? (
+          <div className={`p-1.5 rounded-2xl shadow-sm ${
+            isMine ? 'message-bubble-sent' : 'message-bubble-received'
+          }`}>
+            <AppImage
+              src={message.fileUrl || message.text}
+              alt={message.fileName || 'Shared image'}
+              width={220}
+              height={220}
+              className="w-[220px] h-[220px] object-cover rounded-xl"
+            />
+          </div>
+        ) : message.type === 'file' ? (
           <div className={`flex items-center gap-3 px-4 py-3 rounded-2xl shadow-sm ${
             isMine ? 'message-bubble-sent' : 'message-bubble-received'
           }`}>

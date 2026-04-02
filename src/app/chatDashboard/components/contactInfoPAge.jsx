@@ -1,35 +1,166 @@
 'use client';
-import { useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import AppImage from '@/components/ui/AppImage';
 import {
-  X, Bell, BellOff, Ban, Trash2, ChevronDown, ChevronUp,
+  X, Bell, BellOff, Ban, Trash2, ChevronDown, ChevronUp, Pin,
   Phone, Video, Mail, Users, Image as ImageIcon, FileText, Link2
 } from 'lucide-react';
 import { toast } from 'sonner';
 
-const SHARED_MEDIA = [
-  { id: 'media-1', src: 'https://picsum.photos/80/80?random=1', alt: 'Shared photo of landscape' },
-  { id: 'media-2', src: 'https://picsum.photos/80/80?random=2', alt: 'Shared photo of architecture' },
-  { id: 'media-3', src: 'https://picsum.photos/80/80?random=3', alt: 'Shared photo of nature' },
-  { id: 'media-4', src: 'https://picsum.photos/80/80?random=4', alt: 'Shared photo of city' },
-  { id: 'media-5', src: 'https://picsum.photos/80/80?random=5', alt: 'Shared photo of interior' },
-  { id: 'media-6', src: 'https://picsum.photos/80/80?random=6', alt: 'Shared photo of people' },
-];
+const SHARED_PAGE_SIZE = 24;
 
-const SHARED_FILES = [
-  { id: 'file-1', name: 'Dashboard_v3.fig', size: '4.2 MB', date: 'Today', icon: FileText, color: 'text-sky-500 bg-sky-50' },
-  { id: 'file-2', name: 'Q2_Roadmap.pdf', size: '1.8 MB', date: 'Yesterday', icon: FileText, color: 'text-red-500 bg-red-50' },
-  { id: 'file-3', name: 'Meeting_Notes.docx', size: '0.4 MB', date: 'Mon', icon: FileText, color: 'text-blue-500 bg-blue-50' },
-];
-
-export default function ContactInfoPanel({ conversation, onClose }) {
+export default function ContactInfoPanel({
+  conversation,
+  onClose,
+  onPreferencesUpdated,
+  onConversationRemoved,
+}) {
   const [showMedia, setShowMedia] = useState(true);
   const [showFiles, setShowFiles] = useState(true);
   const [isMuted, setIsMuted] = useState(conversation.isMuted);
+  const [isPinned, setIsPinned] = useState(conversation.isPinned);
+  const [sharedMedia, setSharedMedia] = useState([]);
+  const [sharedFiles, setSharedFiles] = useState([]);
+  const [isLoadingShared, setIsLoadingShared] = useState(false);
+  const [isLoadingMoreShared, setIsLoadingMoreShared] = useState(false);
+  const [sharedPagination, setSharedPagination] = useState({
+    skip: 0,
+    hasMore: false,
+    totalCount: 0,
+  });
 
-  const toggleMute = () => {
-    setIsMuted((prev) => !prev);
-    toast.success(isMuted ? 'Notifications enabled' : 'Notifications muted');
+  useEffect(() => {
+    setIsMuted(conversation.isMuted);
+    setIsPinned(conversation.isPinned);
+  }, [conversation]);
+
+  const loadShared = useCallback(async ({ skip = 0, append = false } = {}) => {
+    if (append) {
+      setIsLoadingMoreShared(true);
+    } else {
+      setIsLoadingShared(true);
+    }
+
+    try {
+      const response = await fetch(
+        `/api/conversations/${conversation.id}/shared?limit=${SHARED_PAGE_SIZE}&skip=${skip}`
+      );
+      const payload = await response.json();
+
+      if (!response.ok) {
+        throw new Error(payload.error || 'Failed to load shared items');
+      }
+
+      setSharedMedia((prev) => (append ? [...prev, ...(payload.media || [])] : payload.media || []));
+      setSharedFiles((prev) => (append ? [...prev, ...(payload.files || [])] : payload.files || []));
+      setSharedPagination({
+        skip,
+        hasMore: Boolean(payload.pagination?.hasMore),
+        totalCount: payload.pagination?.totalCount || 0,
+      });
+    } catch {
+      if (!append) {
+        setSharedMedia([]);
+        setSharedFiles([]);
+      }
+    } finally {
+      if (append) {
+        setIsLoadingMoreShared(false);
+      } else {
+        setIsLoadingShared(false);
+      }
+    }
+  }, [conversation.id]);
+
+  useEffect(() => {
+    loadShared({ skip: 0, append: false });
+  }, [loadShared]);
+
+  const handleLoadMoreShared = async () => {
+    if (!sharedPagination.hasMore || isLoadingMoreShared) {
+      return;
+    }
+
+    await loadShared({
+      skip: sharedPagination.skip + SHARED_PAGE_SIZE,
+      append: true,
+    });
+  };
+
+  const updatePreferences = async (nextPreferences) => {
+    const response = await fetch(`/api/conversations/${conversation.id}/members`, {
+      method: 'PATCH',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(nextPreferences),
+    });
+
+    const payload = await response.json();
+
+    if (!response.ok) {
+      throw new Error(payload.error || 'Failed to update preferences');
+    }
+
+    onPreferencesUpdated?.(conversation.id, payload.preferences);
+    return payload.preferences;
+  };
+
+  const toggleMute = async () => {
+    const next = !isMuted;
+    setIsMuted(next);
+
+    try {
+      await updatePreferences({ isMuted: next });
+      toast.success(next ? 'Notifications muted' : 'Notifications enabled');
+    } catch (error) {
+      setIsMuted(!next);
+      toast.error(error.message || 'Unable to update mute preference');
+    }
+  };
+
+  const togglePin = async () => {
+    const next = !isPinned;
+    setIsPinned(next);
+
+    try {
+      await updatePreferences({ isPinned: next });
+      toast.success(next ? 'Conversation pinned' : 'Conversation unpinned');
+    } catch (error) {
+      setIsPinned(!next);
+      toast.error(error.message || 'Unable to update pin preference');
+    }
+  };
+
+  const removeConversationForCurrentUser = async (successMessage) => {
+    const response = await fetch(`/api/conversations/${conversation.id}`, {
+      method: 'DELETE',
+    });
+    const payload = await response.json();
+
+    if (!response.ok) {
+      throw new Error(payload.error || 'Unable to update conversation');
+    }
+
+    onConversationRemoved?.(conversation.id);
+    toast.success(successMessage);
+    onClose();
+  };
+
+  const handleLeaveGroup = async () => {
+    try {
+      await removeConversationForCurrentUser('You left the group');
+    } catch (error) {
+      toast.error(error.message || 'Unable to leave group');
+    }
+  };
+
+  const handleDeleteConversation = async () => {
+    try {
+      await removeConversationForCurrentUser('Conversation removed');
+    } catch (error) {
+      toast.error(error.message || 'Unable to delete conversation');
+    }
   };
 
   return (
@@ -152,34 +283,43 @@ export default function ContactInfoPanel({ conversation, onClose }) {
             <ImageIcon size={15} className="text-gray-400" />
             <p className="text-xs font-600 text-gray-700 uppercase tracking-widest">Shared Media</p>
             <span className="text-xs text-gray-400 bg-gray-100 px-2 py-0.5 rounded-full">
-              {SHARED_MEDIA.length}
+              {sharedMedia.length}
             </span>
           </div>
           {showMedia ? <ChevronUp size={15} className="text-gray-400" /> : <ChevronDown size={15} className="text-gray-400" />}
         </button>
         {showMedia && (
           <div className="px-4 pb-4 grid grid-cols-3 gap-1.5">
-            {SHARED_MEDIA.map((media) => (
+            {isLoadingShared ? (
+              <p className="col-span-3 text-xs text-gray-400 py-4 text-center">Loading shared media...</p>
+            ) : sharedMedia.length === 0 ? (
+              <p className="col-span-3 text-xs text-gray-400 py-4 text-center">No shared media yet</p>
+            ) : sharedMedia.map((media) => (
               <button
                 key={media.id}
                 onClick={() => toast.info('Media viewer coming soon')}
                 className="aspect-square rounded-lg overflow-hidden hover:opacity-90 active:scale-95 transition-all duration-150"
               >
                 <AppImage
-                  src={media.src}
-                  alt={media.alt}
+                  src={media.url}
+                  alt={media.alt || 'Shared image'}
                   width={80}
                   height={80}
                   className="w-full h-full object-cover"
                 />
               </button>
             ))}
-            <button
-              onClick={() => toast.info('View all media coming soon')}
-              className="aspect-square rounded-lg bg-gray-100 hover:bg-gray-200 flex items-center justify-center transition-colors duration-150"
-            >
-              <span className="text-xs font-600 text-gray-500">View all</span>
-            </button>
+            {(sharedPagination.hasMore || isLoadingMoreShared) && (
+              <button
+                onClick={handleLoadMoreShared}
+                disabled={isLoadingMoreShared}
+                className="col-span-3 rounded-lg bg-gray-100 hover:bg-gray-200 disabled:bg-gray-100/70 flex items-center justify-center py-2 transition-colors duration-150"
+              >
+                <span className="text-xs font-600 text-gray-500">
+                  {isLoadingMoreShared ? 'Loading more...' : 'Load more media'}
+                </span>
+              </button>
+            )}
           </div>
         )}
       </div>
@@ -194,29 +334,48 @@ export default function ContactInfoPanel({ conversation, onClose }) {
             <FileText size={15} className="text-gray-400" />
             <p className="text-xs font-600 text-gray-700 uppercase tracking-widest">Shared Files</p>
             <span className="text-xs text-gray-400 bg-gray-100 px-2 py-0.5 rounded-full">
-              {SHARED_FILES.length}
+              {sharedFiles.length}
             </span>
           </div>
           {showFiles ? <ChevronUp size={15} className="text-gray-400" /> : <ChevronDown size={15} className="text-gray-400" />}
         </button>
         {showFiles && (
           <div className="px-4 pb-4 flex flex-col gap-2">
-            {SHARED_FILES.map((file) => (
+            {isLoadingShared ? (
+              <p className="text-xs text-gray-400 py-4 text-center">Loading shared files...</p>
+            ) : sharedFiles.length === 0 ? (
+              <p className="text-xs text-gray-400 py-4 text-center">No shared files yet</p>
+            ) : sharedFiles.map((file) => (
               <button
                 key={file.id}
-                onClick={() => toast.info(`Downloading ${file.name}...`)}
+                onClick={() => {
+                  if (file.url) {
+                    window.open(file.url, '_blank', 'noopener,noreferrer');
+                  } else {
+                    toast.info(`File link for ${file.name} is unavailable`);
+                  }
+                }}
                 className="flex items-center gap-3 p-2.5 rounded-xl hover:bg-gray-50 transition-colors duration-150 text-left group"
               >
-                <div className={`w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0 ${file.color}`}>
-                  <file.icon size={16} />
+                <div className="w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0 text-sky-500 bg-sky-50">
+                  <FileText size={16} />
                 </div>
                 <div className="flex-1 min-w-0">
                   <p className="text-xs font-600 text-gray-800 truncate">{file.name}</p>
-                  <p className="text-xs text-gray-400">{file.size} · {file.date}</p>
+                  <p className="text-xs text-gray-400">{file.size || 'Unknown size'} - {file.date}</p>
                 </div>
                 <Link2 size={13} className="text-gray-300 group-hover:text-sky-500 transition-colors flex-shrink-0" />
               </button>
             ))}
+            {(sharedPagination.hasMore || isLoadingMoreShared) && (
+              <button
+                onClick={handleLoadMoreShared}
+                disabled={isLoadingMoreShared}
+                className="w-full py-2 rounded-lg bg-gray-100 hover:bg-gray-200 disabled:bg-gray-100/70 text-xs font-600 text-gray-500 transition-colors"
+              >
+                {isLoadingMoreShared ? 'Loading more...' : 'Load more files'}
+              </button>
+            )}
           </div>
         )}
       </div>
@@ -246,7 +405,24 @@ export default function ContactInfoPanel({ conversation, onClose }) {
         </button>
 
         <button
-          onClick={() => toast.warning('Block feature coming soon')}
+          onClick={togglePin}
+          className="flex items-center gap-3 px-3 py-2.5 rounded-xl hover:bg-gray-50 transition-colors duration-150 text-left group"
+        >
+          <div className={`w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 ${
+            isPinned ? 'bg-sky-50' : 'bg-gray-100'
+          }`}>
+            <Pin size={15} className={isPinned ? 'text-sky-600' : 'text-gray-500'} />
+          </div>
+          <div>
+            <p className="text-sm font-500 text-gray-700">
+              {isPinned ? 'Unpin conversation' : 'Pin conversation'}
+            </p>
+            {isPinned && <p className="text-xs text-sky-500">Pinned to top</p>}
+          </div>
+        </button>
+
+        <button
+          onClick={() => (conversation.isGroup ? handleLeaveGroup() : toast.warning('Block feature coming soon'))}
           className="flex items-center gap-3 px-3 py-2.5 rounded-xl hover:bg-red-50 transition-colors duration-150 text-left group"
         >
           <div className="w-8 h-8 bg-red-50 rounded-lg flex items-center justify-center flex-shrink-0">
@@ -258,7 +434,7 @@ export default function ContactInfoPanel({ conversation, onClose }) {
         </button>
 
         <button
-          onClick={() => toast.warning('This will permanently delete the conversation')}
+          onClick={handleDeleteConversation}
           className="flex items-center gap-3 px-3 py-2.5 rounded-xl hover:bg-red-50 transition-colors duration-150 text-left group"
         >
           <div className="w-8 h-8 bg-red-50 rounded-lg flex items-center justify-center flex-shrink-0">
