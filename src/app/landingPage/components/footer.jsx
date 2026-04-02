@@ -73,10 +73,10 @@ export default function LandingFooter() {
             © 2026 ChatApp Inc. All rights reserved.
           </p>
           <div className="flex items-center gap-6">
-            <Link href="/sign-up-login-screen" className="text-xs text-gray-500 hover:text-sky-400 transition-colors">
+            <Link href="/signup-login-screen" className="text-xs text-gray-500 hover:text-sky-400 transition-colors">
               Sign in
             </Link>
-            <Link href="/sign-up-login-screen" className="text-xs text-white bg-sky-500 hover:bg-sky-600 px-4 py-1.5 rounded-lg transition-colors">
+            <Link href="/signup-login-screen" className="text-xs text-white bg-sky-500 hover:bg-sky-600 px-4 py-1.5 rounded-lg transition-colors">
               Get started free
             </Link>
           </div>

@@ -48,13 +48,13 @@ export default function LandingNav() {
         {/* CTA Buttons */}
         <div className="hidden md:flex items-center gap-3">
           <Link
-            href="/sign-up-login-screen"
+            href="/signup-login-screen"
             className="text-sm font-600 text-gray-700 hover:text-sky-600 transition-colors duration-150 px-4 py-2 rounded-lg hover:bg-sky-50"
           >
             Sign in
           </Link>
           <Link
-            href="/sign-up-login-screen"
+            href="/signup-login-screen"
             className="text-sm font-600 text-white bg-sky-500 hover:bg-sky-600 active:scale-95 transition-all duration-150 px-5 py-2.5 rounded-xl shadow-sm shadow-sky-200"
           >
             Get started free
@@ -84,7 +84,7 @@ export default function LandingNav() {
             </a>
           ))}
           <Link
-            href="/sign-up-login-screen"
+            href="/signup-login-screen"
             className="text-sm font-600 text-center text-white bg-sky-500 py-3 rounded-xl"
             onClick={() => setMobileOpen(false)}
           >

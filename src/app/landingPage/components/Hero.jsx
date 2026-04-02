@@ -55,14 +55,14 @@ export default function HeroSection() {
             {/* CTA Buttons */}
             <div className="flex flex-col sm:flex-row gap-3 pt-2">
               <Link
-                href="/sign-up-login-screen"
+                href="/signup-login-screen"
                 className="inline-flex items-center justify-center gap-2 bg-sky-500 hover:bg-sky-600 active:scale-95 text-white font-600 text-sm px-7 py-3.5 rounded-xl shadow-lg shadow-sky-200 transition-all duration-150"
               >
                 Start chatting free
                 <ArrowRight size={16} />
               </Link>
               <Link
-                href="/chat-dashboard"
+                href="/chatDashboard"
                 className="inline-flex items-center justify-center gap-2 bg-white hover:bg-gray-50 active:scale-95 text-gray-700 font-600 text-sm px-7 py-3.5 rounded-xl border border-gray-200 shadow-sm transition-all duration-150"
               >
                 View live demo
@@ -169,7 +169,7 @@ export default function HeroSection() {
                       <AppImage src="https://i.pravatar.cc/24?img=47" alt="Contact avatar" width={24} height={24} className="w-full h-full object-cover" />
                     </div>
                     <div className="message-bubble-received px-3 py-2 shadow-sm">
-                      <p className="text-sm text-gray-800">Let's grab coffee at 6? ☕</p>
+                      <p className="text-sm text-gray-800">Let&apos;s grab coffee at 6? ☕</p>
                       <p className="text-xs text-gray-400 mt-0.5 text-right">2:18 PM</p>
                     </div>
                   </div>
