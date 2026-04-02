@@ -14,6 +14,8 @@ import {
   CheckCheck,
   Image as ImageIcon,
   FileText,
+  Download,
+  ExternalLink,
   X,
 } from 'lucide-react';
 import { toast } from 'sonner';
@@ -424,6 +426,9 @@ function MessageBubble({
   senderAvatar,
   senderAvatarAlt,
 }) {
+  const attachmentUrl = normalizeAttachmentUrl(message.fileUrl || message.text);
+  const attachmentName = message.fileName || (message.type === 'image' ? 'image' : 'attachment');
+
   return (
     <div className={`flex items-end gap-2 ${isMine ? 'flex-row-reverse' : 'flex-row'} ${isConsecutive ? 'mt-0.5' : 'mt-3'}`}>
       {/* Avatar (only for received, non-consecutive) */}
@@ -449,16 +454,59 @@ function MessageBubble({
         )}
 
         {message.type === 'image' ? (
-          <div className={`p-1.5 rounded-2xl shadow-sm ${
-            isMine ? 'message-bubble-sent' : 'message-bubble-received'
+          <div className={`p-1.5 rounded-2xl shadow-sm border ${
+            isMine
+              ? 'message-bubble-sent border-sky-700/80'
+              : 'message-bubble-received border-slate-200'
           }`}>
-            <AppImage
-              src={message.fileUrl || message.text}
-              alt={message.fileName || 'Shared image'}
-              width={220}
-              height={220}
-              className="w-[220px] h-[220px] object-cover rounded-xl"
-            />
+            {attachmentUrl ? (
+              <>
+                <a
+                  href={attachmentUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  className={`block w-[220px] h-[220px] rounded-xl p-1 ${isMine ? 'bg-sky-950/20' : 'bg-slate-200/80'}`}
+                  title="Open image in new tab"
+                >
+                  <AppImage
+                    src={attachmentUrl}
+                    alt={attachmentName || 'Shared image'}
+                    width={220}
+                    height={220}
+                    className={`w-full h-full object-contain rounded-lg ${
+                      isMine ? 'ring-1 ring-white/40' : 'ring-1 ring-slate-200'
+                    }`}
+                  />
+                </a>
+                <div className="mt-2 flex items-center gap-2">
+                  <a
+                    href={attachmentUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    className={`inline-flex items-center gap-1.5 text-xs font-600 px-2.5 py-1 rounded-md ${
+                      isMine ? 'bg-white/20 text-white hover:bg-white/30' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+                    }`}
+                  >
+                    <ExternalLink size={12} />
+                    Open
+                  </a>
+                  <a
+                    href={attachmentUrl}
+                    download={attachmentName}
+                    className={`inline-flex items-center gap-1.5 text-xs font-600 px-2.5 py-1 rounded-md ${
+                      isMine ? 'bg-white/20 text-white hover:bg-white/30' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+                    }`}
+                  >
+                    <Download size={12} />
+                    Download
+                  </a>
+                </div>
+              </>
+            ) : (
+              <div className={`w-[220px] h-[220px] rounded-xl p-2 flex items-center justify-center text-xs ${isMine ? 'bg-white/20 text-white' : 'bg-slate-200 text-slate-600'}`}>
+                Image unavailable
+              </div>
+            )}
           </div>
         ) : message.type === 'file' ? (
           <div className={`flex items-center gap-3 px-4 py-3 rounded-2xl shadow-sm ${
@@ -476,6 +524,35 @@ function MessageBubble({
               <p className={`text-xs ${isMine ? 'text-sky-100' : 'text-gray-400'}`}>
                 {message.fileSize}
               </p>
+              {attachmentUrl ? (
+                <div className="mt-2 flex items-center gap-2">
+                  <a
+                    href={attachmentUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    className={`inline-flex items-center gap-1.5 text-xs font-600 px-2.5 py-1 rounded-md ${
+                      isMine ? 'bg-white/20 text-white hover:bg-white/30' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+                    }`}
+                  >
+                    <ExternalLink size={12} />
+                    Open
+                  </a>
+                  <a
+                    href={attachmentUrl}
+                    download={attachmentName}
+                    className={`inline-flex items-center gap-1.5 text-xs font-600 px-2.5 py-1 rounded-md ${
+                      isMine ? 'bg-white/20 text-white hover:bg-white/30' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+                    }`}
+                  >
+                    <Download size={12} />
+                    Download
+                  </a>
+                </div>
+              ) : (
+                <p className={`mt-1 text-xs ${isMine ? 'text-sky-100' : 'text-gray-500'}`}>
+                  Attachment unavailable
+                </p>
+              )}
             </div>
           </div>
         ) : (
@@ -490,7 +567,7 @@ function MessageBubble({
 
         {/* Timestamp + status */}
         <div className={`flex items-center gap-1 px-1 ${isMine ? 'flex-row-reverse' : 'flex-row'}`}>
-          <span className="text-xs text-gray-400">{message.timestamp}</span>
+          <span className={`text-xs ${isMine ? 'text-sky-700' : 'text-gray-400'}`}>{message.timestamp}</span>
           {isMine && <MessageStatus status={message.status} />}
         </div>
       </div>
@@ -498,17 +575,48 @@ function MessageBubble({
   );
 }
 
+function normalizeAttachmentUrl(rawUrl) {
+  if (!rawUrl || typeof rawUrl !== 'string') {
+    return '';
+  }
+
+  const trimmed = rawUrl.trim();
+  if (!trimmed) {
+    return '';
+  }
+
+  if (/^https?:\/\//i.test(trimmed)) {
+    return trimmed;
+  }
+
+  if (trimmed.startsWith('uploads/')) {
+    return `/${trimmed}`;
+  }
+
+  if (trimmed.startsWith('/')) {
+    return trimmed;
+  }
+
+  // Older messages can store only the generated filename (without /uploads prefix).
+  // Treat file-like names as files under public/uploads.
+  if (!trimmed.includes('/') && /\.[a-z0-9]{2,8}$/i.test(trimmed)) {
+    return `/uploads/${trimmed}`;
+  }
+
+  return `/${trimmed.replace(/^\/+/, '')}`;
+}
+
 function MessageStatus({ status }) {
   if (status === 'sending') {
     return (
-      <svg className="animate-spin w-3 h-3 text-gray-400" fill="none" viewBox="0 0 24 24">
+      <svg className="animate-spin w-3 h-3 text-sky-600" fill="none" viewBox="0 0 24 24">
         <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
         <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
       </svg>
     );
   }
-  if (status === 'sent') return <Check size={12} className="text-gray-400" />;
-  if (status === 'delivered') return <CheckCheck size={12} className="text-gray-400" />;
-  if (status === 'read') return <CheckCheck size={12} className="text-sky-500" />;
+  if (status === 'sent') return <Check size={12} className="text-sky-600" />;
+  if (status === 'delivered') return <CheckCheck size={12} className="text-sky-600" />;
+  if (status === 'read') return <CheckCheck size={12} className="text-sky-700" />;
   return null;
 }
