@@ -25,11 +25,33 @@ export default function SignupForm({ onSwitchToLogin }) {
 
   const onSubmit = async (data) => {
     setIsLoading(true);
-    // Backend integration point: POST /api/auth/register with { fullName, email, password }
-    await new Promise((r) => setTimeout(r, 1400));
-    toast.success(`Welcome to ChatApp, ${data.fullName.split(' ')[0]}!`);
-    router.push('/chatDashboard');
-    setIsLoading(false);
+    try {
+      const response = await fetch('/api/auth/register', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          fullName: data.fullName,
+          email: data.email,
+          password: data.password,
+        }),
+      });
+
+      const payload = await response.json();
+
+      if (!response.ok) {
+        toast.error(payload.error || 'Failed to create account');
+        return;
+      }
+
+      toast.success(`Welcome to ChatApp, ${payload.user.name.split(' ')[0]}!`);
+      router.push('/chatDashboard');
+    } catch {
+      toast.error('Unable to create account right now. Please try again.');
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const passwordStrength = (pwd) => {

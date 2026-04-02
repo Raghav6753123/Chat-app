@@ -1,22 +1,130 @@
 'use client';
-import { useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { Toaster } from 'sonner';
 import ConversationList from './convoList';
 import ChatWindow from './chatWindow';
 import ContactInfoPanel from './contactInfoPAge';
-import { conversations } from './mockData';
 
 export default function ChatDashboard() {
+  const router = useRouter();
   const [activeConversationId, setActiveConversationId] = useState(null);
   const [showInfoPanel, setShowInfoPanel] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
+  const [currentUser, setCurrentUser] = useState(null);
+  const [conversations, setConversations] = useState([]);
+  const [messagesByConversation, setMessagesByConversation] = useState({});
+  const [isLoading, setIsLoading] = useState(true);
 
-  const activeConversation = conversations.find((c) => c.id === activeConversationId) ?? null;
+  useEffect(() => {
+    let mounted = true;
+
+    const bootstrap = async () => {
+      try {
+        const meResponse = await fetch('/api/auth/me');
+        if (!meResponse.ok) {
+          router.replace('/signup-login-screen');
+          return;
+        }
+
+        const meData = await meResponse.json();
+        if (!mounted) return;
+        setCurrentUser(meData.user);
+
+        const conversationsResponse = await fetch('/api/conversations');
+        const conversationData = await conversationsResponse.json();
+        if (!conversationsResponse.ok) {
+          setConversations([]);
+          return;
+        }
+        if (!mounted) return;
+        setConversations(conversationData.conversations || []);
+      } catch {
+        if (mounted) {
+          setConversations([]);
+        }
+      } finally {
+        if (mounted) {
+          setIsLoading(false);
+        }
+      }
+    };
+
+    bootstrap();
+
+    return () => {
+      mounted = false;
+    };
+  }, [router]);
+
+  const activeConversationBase = conversations.find((c) => c.id === activeConversationId) ?? null;
+  const activeConversation = useMemo(() => {
+    if (!activeConversationBase) {
+      return null;
+    }
+
+    return {
+      ...activeConversationBase,
+      messages: messagesByConversation[activeConversationBase.id] || [],
+    };
+  }, [activeConversationBase, messagesByConversation]);
 
   const filteredConversations = conversations.filter((c) =>
     c.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
     c.lastMessage.toLowerCase().includes(searchQuery.toLowerCase())
   );
+
+  const handleSelectConversation = async (conversationId) => {
+    setActiveConversationId(conversationId);
+    setShowInfoPanel(false);
+
+    if (messagesByConversation[conversationId]) {
+      return;
+    }
+
+    try {
+      const response = await fetch(`/api/conversations/${conversationId}/messages`);
+      const data = await response.json();
+
+      if (!response.ok) {
+        return;
+      }
+
+      setMessagesByConversation((prev) => ({
+        ...prev,
+        [conversationId]: data.messages || [],
+      }));
+
+      setConversations((prev) =>
+        prev.map((conversation) =>
+          conversation.id === conversationId
+            ? { ...conversation, unreadCount: 0 }
+            : conversation
+        )
+      );
+    } catch {
+      // Keep existing UI state if message fetch fails.
+    }
+  };
+
+  const handleMessageSent = (conversationId, message) => {
+    setMessagesByConversation((prev) => ({
+      ...prev,
+      [conversationId]: [...(prev[conversationId] || []), message],
+    }));
+
+    setConversations((prev) =>
+      prev.map((conversation) =>
+        conversation.id === conversationId
+          ? {
+              ...conversation,
+              lastMessage: message.text || message.type,
+              lastMessageTime: message.timestamp,
+            }
+          : conversation
+      )
+    );
+  };
 
   return (
     <div className="h-screen flex bg-slate-50 overflow-hidden font-sans antialiased selection:bg-sky-200 selection:text-sky-900 transition-colors duration-300">
@@ -27,9 +135,7 @@ export default function ChatDashboard() {
         <ConversationList
           conversations={filteredConversations}
           activeId={activeConversationId}
-          onSelect={(conversationId) => {
-            setActiveConversationId(conversationId);
-          }}
+          onSelect={handleSelectConversation}
           searchQuery={searchQuery}
           onSearchChange={setSearchQuery}
         />
@@ -37,11 +143,19 @@ export default function ChatDashboard() {
 
       {/* Center — Chat window */}
       <div className="flex-1 flex flex-col h-full min-w-0 bg-slate-50 relative z-0 shadow-[inset_0_0_10px_2px_rgba(0,0,0,0.01)] transition-all duration-300">
-        {activeConversation ? (
+        {isLoading ? (
+          <div className="flex h-full items-center justify-center px-6">
+            <div className="text-center">
+              <p className="text-lg font-600 text-slate-700">Loading your chats...</p>
+            </div>
+          </div>
+        ) : activeConversation ? (
           <ChatWindow
             key={activeConversation.id}
             conversation={activeConversation}
+            currentUserId={currentUser?.id}
             onToggleInfo={() => setShowInfoPanel(!showInfoPanel)}
+            onMessageSent={handleMessageSent}
             showInfo={showInfoPanel}
           />
         ) : (

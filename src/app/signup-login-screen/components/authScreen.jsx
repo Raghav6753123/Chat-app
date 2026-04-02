@@ -1,5 +1,6 @@
 'use client';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import LoginForm from './loginForm';
 import SignupForm from './signupForm';
 import AppLogo from '@/components/ui/AppLogo';
@@ -7,7 +8,29 @@ import AppImage from '@/components/ui/AppImage';
 import { Shield, Zap, Users } from 'lucide-react';
 
 export default function AuthScreen() {
+  const router = useRouter();
   const [activeTab, setActiveTab] = useState('login');
+
+  useEffect(() => {
+    let mounted = true;
+
+    const checkSession = async () => {
+      try {
+        const response = await fetch('/api/auth/me');
+        if (mounted && response.ok) {
+          router.replace('/chatDashboard');
+        }
+      } catch {
+        // No-op: unauthenticated users stay on this screen.
+      }
+    };
+
+    checkSession();
+
+    return () => {
+      mounted = false;
+    };
+  }, [router]);
 
   return (
     <div className="min-h-screen flex">

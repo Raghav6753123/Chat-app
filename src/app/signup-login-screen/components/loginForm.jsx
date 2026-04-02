@@ -2,52 +2,51 @@
 import { useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { useRouter } from 'next/navigation';
-import { Eye, EyeOff, Copy, Check, LogIn } from 'lucide-react';
+import { Eye, EyeOff, LogIn } from 'lucide-react';
 import { toast } from 'sonner';
-
-// Backend integration point: replace with real auth API call
-const DEMO_EMAIL = 'alex.morgan@chatapp.io';
-const DEMO_PASSWORD = 'ChatDemo2026!';
 
 export default function LoginForm({ onSwitchToSignup }) {
   const router = useRouter();
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
-  const [copiedField, setCopiedField] = useState(null);
 
   const {
     register,
     handleSubmit,
-    setValue,
     formState: { errors },
   } = useForm({
     defaultValues: { email: '', password: '', rememberMe: false },
   });
 
-  const handleCopy = async (field, value) => {
-    await navigator.clipboard.writeText(value);
-    setCopiedField(field);
-    setTimeout(() => setCopiedField(null), 2000);
-  };
-
-  const fillDemo = () => {
-    setValue('email', DEMO_EMAIL);
-    setValue('password', DEMO_PASSWORD);
-    toast.info('Demo credentials filled in');
-  };
-
   const onSubmit = async (data) => {
     setIsLoading(true);
-    // Backend integration point: POST /api/auth/login with { email, password }
-    await new Promise((r) => setTimeout(r, 1200));
 
-    if (data.email === DEMO_EMAIL && data.password === DEMO_PASSWORD) {
-      toast.success('Welcome back, Alex!');
+    try {
+      const response = await fetch('/api/auth/login', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          email: data.email,
+          password: data.password,
+        }),
+      });
+
+      const payload = await response.json();
+
+      if (!response.ok) {
+        toast.error(payload.error || 'Failed to sign in');
+        return;
+      }
+
+      toast.success(`Welcome back, ${payload.user.name.split(' ')[0]}!`);
       router.push('/chatDashboard');
-    } else {
-      toast.error('Invalid credentials — use the demo account below to sign in');
+    } catch {
+      toast.error('Unable to sign in right now. Please try again.');
+    } finally {
+      setIsLoading(false);
     }
-    setIsLoading(false);
   };
 
   return (
@@ -179,40 +178,6 @@ export default function LoginForm({ onSwitchToSignup }) {
           )}
         </button>
       </form>
-
-      {/* Demo credentials */}
-      <div className="bg-sky-50 border border-sky-100 rounded-xl p-4 flex flex-col gap-3">
-        <div className="flex items-center justify-between">
-          <p className="text-xs font-600 text-sky-800">Demo account</p>
-          <button
-            onClick={fillDemo}
-            className="text-xs font-600 text-sky-600 hover:text-sky-700 bg-white border border-sky-200 px-3 py-1 rounded-lg transition-colors active:scale-95"
-          >
-            Auto-fill
-          </button>
-        </div>
-        <div className="flex flex-col gap-2">
-          {[
-            { key: 'email', label: 'Email', value: DEMO_EMAIL },
-            { key: 'password', label: 'Password', value: DEMO_PASSWORD },
-          ].map((cred) => (
-            <div key={`cred-${cred.key}`} className="flex items-center justify-between bg-white border border-sky-100 rounded-lg px-3 py-2">
-              <div>
-                <p className="text-xs text-sky-600 font-500">{cred.label}</p>
-                <p className="text-xs font-600 text-gray-800 font-mono">{cred.value}</p>
-              </div>
-              <button
-                type="button"
-                onClick={() => handleCopy(cred.key, cred.value)}
-                className="text-gray-400 hover:text-sky-600 transition-colors p-1"
-                aria-label={`Copy ${cred.label}`}
-              >
-                {copiedField === cred.key ? <Check size={14} className="text-emerald-500" /> : <Copy size={14} />}
-              </button>
-            </div>
-          ))}
-        </div>
-      </div>
 
       <p className="text-center text-sm text-gray-500">
         Don&apos;t have an account?{' '}

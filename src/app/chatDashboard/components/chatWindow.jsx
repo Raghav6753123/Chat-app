@@ -1,73 +1,68 @@
-'use client';
-import { useState, useRef, useEffect } from 'react';
+"use client";
+import { useEffect, useMemo, useRef, useState } from 'react';
 import AppImage from '@/components/ui/AppImage';
-import { Phone, Video, Info, MoreVertical, Paperclip, Smile, Mic, Send, Check, CheckCheck, Image as ImageIcon, FileText, X } from 'lucide-react';
+import {
+  Phone,
+  Video,
+  Info,
+  MoreVertical,
+  Paperclip,
+  Smile,
+  Mic,
+  Send,
+  Check,
+  CheckCheck,
+  Image as ImageIcon,
+  FileText,
+  X,
+} from 'lucide-react';
 import { toast } from 'sonner';
 
-const ME = 'user-me';
+const EMOJI_LIST = [':)', '<3', ':D', ';)', ':P', 'XD', ':(', ':|'];
 
-const EMOJI_LIST = ['😊', '❤️', '👍', '😂', '🎉', '🙌', '🔥', '😍', '🤔', '👀', '💯', '✅', '😢', '😅', '🙏', '💪'];
-
-export default function ChatWindow({ conversation, onToggleInfo, showInfo }) {
-  const [messages, setMessages] = useState(conversation.messages);
+export default function ChatWindow({
+  conversation,
+  currentUserId,
+  onToggleInfo,
+  onMessageSent,
+  showInfo,
+}) {
   const [inputText, setInputText] = useState('');
   const [showEmoji, setShowEmoji] = useState(false);
-  const [isTyping, setIsTyping] = useState(false);
   const messagesEndRef = useRef(null);
   const inputRef = useRef(null);
+
+  const messages = useMemo(() => conversation.messages || [], [conversation.messages]);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
 
-  const sendMessage = () => {
+  const sendMessage = async () => {
     const text = inputText.trim();
     if (!text) return;
 
-    const newMsg = {
-      id: `msg-new-${Date.now()}`,
-      senderId: ME,
-      text,
-      timestamp: new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }),
-      status: 'sending',
-      type: 'text',
-    };
-
-    setMessages((prev) => [...prev, newMsg]);
     setInputText('');
     setShowEmoji(false);
 
-    // Backend integration point: POST /api/messages with { conversationId, text }
-    setTimeout(() => {
-      setMessages((prev) =>
-        prev.map((m) => (m.id === newMsg.id ? { ...m, status: 'delivered' } : m))
-      );
-    }, 800);
+    try {
+      const response = await fetch(`/api/conversations/${conversation.id}/messages`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text, type: 'text' }),
+      });
 
-    // Simulate reply typing
-    setIsTyping(true);
-    setTimeout(() => {
-      setIsTyping(false);
-      if (Math.random() > 0.4) {
-        const replies = [
-          'Got it! 👍',
-          'That makes sense!',
-          'Sounds good to me 😊',
-          'Let me check and get back to you',
-          'Perfect timing!',
-          '100% agree with that',
-        ];
-        const reply = {
-          id: `msg-reply-${Date.now()}`,
-          senderId: conversation.id,
-          text: replies[Math.floor(Math.random() * replies.length)],
-          timestamp: new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }),
-          status: 'read',
-          type: 'text',
-        };
-        setMessages((prev) => [...prev, reply]);
+      const payload = await response.json();
+
+      if (!response.ok) {
+        toast.error(payload.error || 'Failed to send message');
+        return;
       }
-    }, 2500);
+
+      onMessageSent?.(conversation.id, payload.message);
+    } catch {
+      toast.error('Unable to send message right now.');
+    }
   };
 
   const handleKeyDown = (e) => {
@@ -78,27 +73,24 @@ export default function ChatWindow({ conversation, onToggleInfo, showInfo }) {
   };
 
   const appendEmoji = (emoji) => {
-    setInputText((prev) => prev + emoji);
+    setInputText((prev) => `${prev}${emoji}`);
     inputRef.current?.focus();
   };
 
-  // Group messages by date
   const groupedMessages = [];
-  messages.forEach((msg) => {
+  messages.forEach((message) => {
     const date = 'Today';
-    const last = groupedMessages[groupedMessages.length - 1];
-    if (last && last.date === date) {
-      last.messages.push(msg);
+    const lastGroup = groupedMessages[groupedMessages.length - 1];
+    if (lastGroup && lastGroup.date === date) {
+      lastGroup.messages.push(message);
     } else {
-      groupedMessages.push({ date, messages: [msg] });
+      groupedMessages.push({ date, messages: [message] });
     }
   });
 
   return (
     <div className="flex flex-col h-full bg-slate-50">
-      {/* Header */}
       <div className="bg-white border-b border-gray-100 px-4 py-3 flex items-center gap-3 flex-shrink-0">
-        {/* Avatar + info */}
         <div className="relative flex-shrink-0">
           <div className="w-10 h-10 rounded-full overflow-hidden bg-gray-100">
             <AppImage
@@ -126,12 +118,10 @@ export default function ChatWindow({ conversation, onToggleInfo, showInfo }) {
           <p className="text-xs text-gray-400">
             {conversation.isOnline && !conversation.isGroup
               ? 'Online'
-              : isTyping
-              ? 'Typing...' : conversation.lastSeen ?? (conversation.isGroup ?'Tap to view group info' : 'Offline')}
+              : conversation.lastSeen ?? (conversation.isGroup ? 'Tap to view group info' : 'Offline')}
           </p>
         </div>
 
-        {/* Actions */}
         <div className="flex items-center gap-1">
           <button
             onClick={() => toast.info('Voice call starting...')}
@@ -165,72 +155,40 @@ export default function ChatWindow({ conversation, onToggleInfo, showInfo }) {
         </div>
       </div>
 
-      {/* Messages area */}
       <div className="flex-1 overflow-y-auto chat-scrollbar px-4 py-4 flex flex-col gap-1">
         {groupedMessages.map((group) => (
           <div key={`date-group-${group.date}`} className="flex flex-col gap-1">
-            {/* Date separator */}
             <div className="flex items-center justify-center my-3">
               <span className="text-xs text-gray-400 bg-white border border-gray-100 px-3 py-1 rounded-full shadow-sm">
                 {group.date}
               </span>
             </div>
 
-            {group.messages.map((msg, idx) => {
-              const isMine = msg.senderId === ME;
-              const isConsecutive =
-                idx > 0 && group.messages[idx - 1].senderId === msg.senderId;
+            {group.messages.map((message, index) => {
+              const isMine = message.senderId === currentUserId;
+              const isConsecutive = index > 0 && group.messages[index - 1].senderId === message.senderId;
 
               return (
                 <MessageBubble
-                  key={msg.id}
-                  message={msg}
+                  key={message.id}
+                  message={message}
                   isMine={isMine}
                   isConsecutive={isConsecutive}
                   senderName={
                     !isMine && conversation.isGroup
-                      ? msg.senderId.charAt(0).toUpperCase() + msg.senderId.slice(1)
+                      ? message.senderName || message.senderId
                       : undefined
                   }
-                  senderAvatar={
-                    !isMine && !isConsecutive ? conversation.avatar : undefined
-                  }
+                  senderAvatar={!isMine && !isConsecutive ? conversation.avatar : undefined}
                   senderAvatarAlt={conversation.avatarAlt}
                 />
               );
             })}
           </div>
         ))}
-
-        {/* Typing indicator */}
-        {isTyping && (
-          <div className="flex items-end gap-2">
-            <div className="w-7 h-7 rounded-full overflow-hidden flex-shrink-0">
-              <AppImage
-                src={conversation.avatar}
-                alt={conversation.avatarAlt}
-                width={28}
-                height={28}
-                className="w-full h-full object-cover"
-              />
-            </div>
-            <div className="bg-white border border-gray-100 rounded-2xl rounded-bl-sm px-4 py-3 shadow-sm">
-              <div className="flex items-center gap-1">
-                {[0, 1, 2].map((dot) => (
-                  <div
-                    key={`typing-${dot}`}
-                    className="w-2 h-2 bg-gray-400 rounded-full animate-bounce"
-                    style={{ animationDelay: `${dot * 0.15}s` }}
-                  />
-                ))}
-              </div>
-            </div>
-          </div>
-        )}
         <div ref={messagesEndRef} />
       </div>
 
-      {/* Emoji picker */}
       {showEmoji && (
         <div className="bg-white border-t border-gray-100 px-4 py-3 flex-shrink-0">
           <div className="flex items-center justify-between mb-2">
@@ -244,7 +202,7 @@ export default function ChatWindow({ conversation, onToggleInfo, showInfo }) {
               <button
                 key={`emoji-${emoji}`}
                 onClick={() => appendEmoji(emoji)}
-                className="text-xl hover:scale-125 transition-transform duration-100 active:scale-95"
+                className="text-sm px-2 py-1 bg-gray-100 rounded-md hover:bg-gray-200 transition-colors"
               >
                 {emoji}
               </button>
@@ -253,9 +211,7 @@ export default function ChatWindow({ conversation, onToggleInfo, showInfo }) {
         </div>
       )}
 
-      {/* Input bar */}
       <div className="bg-white border-t border-gray-100 px-4 py-3 flex items-center gap-2 flex-shrink-0">
-        {/* Attachment */}
         <div className="relative group">
           <button
             className="w-9 h-9 flex items-center justify-center rounded-xl text-gray-400 hover:bg-gray-100 hover:text-sky-600 transition-all duration-150"
@@ -263,7 +219,6 @@ export default function ChatWindow({ conversation, onToggleInfo, showInfo }) {
           >
             <Paperclip size={19} />
           </button>
-          {/* Attachment dropdown on hover */}
           <div className="absolute bottom-12 left-0 bg-white border border-gray-100 rounded-xl shadow-lg p-1 hidden group-hover:flex flex-col gap-0.5 w-36 z-10">
             <button
               onClick={() => toast.info('Photo sharing coming soon')}
@@ -282,7 +237,6 @@ export default function ChatWindow({ conversation, onToggleInfo, showInfo }) {
           </div>
         </div>
 
-        {/* Emoji */}
         <button
           onClick={() => setShowEmoji(!showEmoji)}
           className={`w-9 h-9 flex items-center justify-center rounded-xl transition-all duration-150 ${
@@ -293,7 +247,6 @@ export default function ChatWindow({ conversation, onToggleInfo, showInfo }) {
           <Smile size={19} />
         </button>
 
-        {/* Input */}
         <div className="flex-1 relative">
           <input
             ref={inputRef}
@@ -306,7 +259,6 @@ export default function ChatWindow({ conversation, onToggleInfo, showInfo }) {
           />
         </div>
 
-        {/* Send / Voice */}
         {inputText.trim() ? (
           <button
             onClick={sendMessage}
