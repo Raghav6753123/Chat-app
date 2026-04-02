@@ -14,6 +14,11 @@ const conversationMemberSchema = new Schema(
       required: true,
       index: true,
     },
+    role: {
+      type: String,
+      enum: ['owner', 'admin', 'member'],
+      default: 'member',
+    },
     isMuted: { type: Boolean, default: false },
     isPinned: { type: Boolean, default: false },
     unreadCount: { type: Number, default: 0 },

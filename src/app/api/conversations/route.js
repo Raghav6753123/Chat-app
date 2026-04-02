@@ -7,6 +7,7 @@ import Conversation from '@/models/Conversation';
 import ConversationMember from '@/models/ConversationMember';
 import Message from '@/models/Message';
 import User from '@/models/User';
+import { getPusherServer } from '@/lib/pusher-server';
 
 function avatarAlt(name) {
   return `${name} avatar`;
@@ -54,7 +55,10 @@ async function buildConversationSummaries(authUserId) {
         ? usersById.get(peerMembership.userId.toString())
         : null;
 
-      const latestMessage = await Message.findOne({ conversationId: conversation._id })
+      const latestMessage = await Message.findOne({
+        conversationId: conversation._id,
+        hiddenFor: { $ne: authUserId },
+      })
         .sort({ createdAt: -1 })
         .lean();
 
@@ -83,11 +87,23 @@ async function buildConversationSummaries(authUserId) {
         isMuted: Boolean(membership.isMuted),
         isPinned: Boolean(membership.isPinned),
         members: conversation.memberCount || members.length,
+        memberRole: membership.role || 'member',
+        canManageGroup: Boolean(
+          conversation.isGroup &&
+          ((membership.role || 'member') === 'owner' ||
+            (membership.role || 'member') === 'admin' ||
+            conversation.createdBy?.toString() === authUserId.toString())
+        ),
       };
     })
   );
 
   return output.filter(Boolean);
+}
+
+async function buildConversationSummaryForUser(authUserId, conversationId) {
+  const summaries = await buildConversationSummaries(authUserId);
+  return summaries.find((summary) => summary.id === conversationId.toString()) || null;
 }
 
 export async function GET(request) {
@@ -200,6 +216,7 @@ export async function POST(request) {
     avatarUrl: isGroup
       ? `https://i.pravatar.cc/48?u=${encodeURIComponent(groupName || memberUsers[0].email)}`
       : '',
+    createdBy: isGroup ? authUser._id : null,
     memberCount: memberUsers.length + 1,
     lastMessage: isGroup
       ? `${authUser.name} created the group`
@@ -211,6 +228,7 @@ export async function POST(request) {
     {
       conversationId: conversation._id,
       userId: authUser._id,
+      role: isGroup ? 'owner' : 'member',
       isMuted: false,
       isPinned: false,
       unreadCount: 0,
@@ -219,6 +237,7 @@ export async function POST(request) {
     ...memberUsers.map((user) => ({
       conversationId: conversation._id,
       userId: user._id,
+      role: 'member',
       isMuted: false,
       isPinned: false,
       unreadCount: 1,
@@ -244,6 +263,27 @@ export async function POST(request) {
   const createdConversation = summaries.find(
     (item) => item.id === conversation._id.toString()
   );
+
+  const pusherServer = getPusherServer();
+  if (pusherServer) {
+    try {
+      const recipients = [...memberUsers, authUser];
+      await Promise.all(
+        recipients.map(async (user) => {
+          const summary = await buildConversationSummaryForUser(user._id, conversation._id);
+          if (!summary) {
+            return;
+          }
+
+          await pusherServer.trigger(`private-user-${user._id.toString()}`, 'conversation-added', {
+            conversation: summary,
+          });
+        })
+      );
+    } catch {
+      // Keep API success even if realtime fanout fails.
+    }
+  }
 
   return NextResponse.json({ conversation: createdConversation, existed: false }, { status: 201 });
 }

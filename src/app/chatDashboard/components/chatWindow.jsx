@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import AppImage from '@/components/ui/AppImage';
 import {
   Phone,
@@ -16,6 +16,9 @@ import {
   FileText,
   Download,
   ExternalLink,
+  Copy,
+  Trash2,
+  ChevronDown,
   X,
 } from 'lucide-react';
 import { toast } from 'sonner';
@@ -35,8 +38,11 @@ const ALLOWED_FILE_TYPES = new Set([
 export default function ChatWindow({
   conversation,
   currentUserId,
+  activeTypingUsers = [],
   onToggleInfo,
+  onTypingStatusChange,
   onMessageSent,
+  onMessageDeleted,
   onConversationUnavailable,
   showInfo,
 }) {
@@ -47,6 +53,8 @@ export default function ChatWindow({
   const inputRef = useRef(null);
   const imageInputRef = useRef(null);
   const fileInputRef = useRef(null);
+  const typingTimeoutRef = useRef(null);
+  const isTypingRef = useRef(false);
 
   const messages = useMemo(() => conversation.messages || [], [conversation.messages]);
 
@@ -54,12 +62,45 @@ export default function ChatWindow({
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
 
+  const emitTyping = useCallback(async (isTyping) => {
+    if (!conversation?.id || !onTypingStatusChange) {
+      return;
+    }
+
+    if (isTypingRef.current === isTyping) {
+      return;
+    }
+
+    isTypingRef.current = isTyping;
+    await onTypingStatusChange(conversation.id, isTyping);
+  }, [conversation?.id, onTypingStatusChange]);
+
+  const scheduleTypingStop = useCallback(() => {
+    if (typingTimeoutRef.current) {
+      clearTimeout(typingTimeoutRef.current);
+    }
+
+    typingTimeoutRef.current = setTimeout(() => {
+      emitTyping(false);
+    }, 1400);
+  }, [emitTyping]);
+
+  useEffect(() => {
+    return () => {
+      if (typingTimeoutRef.current) {
+        clearTimeout(typingTimeoutRef.current);
+      }
+      emitTyping(false);
+    };
+  }, [conversation?.id, emitTyping]);
+
   const sendMessage = async () => {
     const text = inputText.trim();
     if (!text) return;
 
     setInputText('');
     setShowEmoji(false);
+    emitTyping(false);
 
     try {
       const response = await fetch(`/api/conversations/${conversation.id}/messages`, {
@@ -189,8 +230,90 @@ export default function ChatWindow({
   };
 
   const appendEmoji = (emoji) => {
-    setInputText((prev) => `${prev}${emoji}`);
+    setInputText((prev) => {
+      const next = `${prev}${emoji}`;
+      if (next.trim()) {
+        emitTyping(true);
+        scheduleTypingStop();
+      }
+      return next;
+    });
     inputRef.current?.focus();
+  };
+
+  const handleInputChange = (event) => {
+    const next = event.target.value;
+    setInputText(next);
+
+    if (!next.trim()) {
+      if (typingTimeoutRef.current) {
+        clearTimeout(typingTimeoutRef.current);
+      }
+      emitTyping(false);
+      return;
+    }
+
+    emitTyping(true);
+    scheduleTypingStop();
+  };
+
+  const typingText = useMemo(() => {
+    if (!activeTypingUsers.length) {
+      return '';
+    }
+    if (activeTypingUsers.length === 1) {
+      return `${activeTypingUsers[0]} is typing...`;
+    }
+    if (activeTypingUsers.length === 2) {
+      return `${activeTypingUsers[0]} and ${activeTypingUsers[1]} are typing...`;
+    }
+    return `${activeTypingUsers[0]} and ${activeTypingUsers.length - 1} others are typing...`;
+  }, [activeTypingUsers]);
+
+  const copyMessageText = async (text) => {
+    const value = String(text || '').trim();
+    if (!value) {
+      toast.error('Nothing to copy');
+      return;
+    }
+
+    try {
+      await navigator.clipboard.writeText(value);
+      toast.success('Message copied');
+    } catch {
+      toast.error('Unable to copy message');
+    }
+  };
+
+  const deleteMessage = async (messageId, scope) => {
+    try {
+      const response = await fetch(`/api/conversations/${conversation.id}/messages/${messageId}`, {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ scope }),
+      });
+
+      const payload = await response.json();
+
+      if (!response.ok) {
+        toast.error(payload.error || 'Failed to delete message');
+        return;
+      }
+
+      onMessageDeleted?.(conversation.id, messageId, {
+        updateConversationSummary: scope === 'everyone',
+        lastMessage: payload.lastMessage,
+        lastMessageTime: payload.lastMessageTime,
+      });
+
+      if (scope === 'everyone') {
+        toast.success('Message deleted for everyone');
+      } else {
+        toast.success('Message deleted for you');
+      }
+    } catch {
+      toast.error('Unable to delete message right now');
+    }
   };
 
   const groupedMessages = [];
@@ -232,9 +355,9 @@ export default function ChatWindow({
             )}
           </div>
           <p className="text-xs text-gray-400">
-            {conversation.isOnline && !conversation.isGroup
+            {typingText || (conversation.isOnline && !conversation.isGroup
               ? 'Online'
-              : conversation.lastSeen ?? (conversation.isGroup ? 'Tap to view group info' : 'Offline')}
+              : conversation.lastSeen ?? (conversation.isGroup ? 'Tap to view group info' : 'Offline'))}
           </p>
         </div>
 
@@ -290,6 +413,9 @@ export default function ChatWindow({
                   message={message}
                   isMine={isMine}
                   isConsecutive={isConsecutive}
+                  onCopyMessage={() => copyMessageText(message.text)}
+                  onDeleteForMe={() => deleteMessage(message.id, 'me')}
+                  onDeleteForEveryone={() => deleteMessage(message.id, 'everyone')}
                   senderName={
                     !isMine && conversation.isGroup
                       ? message.senderName || message.senderId
@@ -383,7 +509,8 @@ export default function ChatWindow({
             type="text"
             placeholder="Type a message..."
             value={inputText}
-            onChange={(e) => setInputText(e.target.value)}
+            onChange={handleInputChange}
+            onBlur={() => emitTyping(false)}
             onKeyDown={handleKeyDown}
             className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-2.5 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-sky-500/30 focus:border-sky-500 focus:bg-white transition-all duration-150"
           />
@@ -422,10 +549,14 @@ function MessageBubble({
   message,
   isMine,
   isConsecutive,
+  onCopyMessage,
+  onDeleteForMe,
+  onDeleteForEveryone,
   senderName,
   senderAvatar,
   senderAvatarAlt,
 }) {
+  const [showActions, setShowActions] = useState(false);
   const attachmentUrl = normalizeAttachmentUrl(message.fileUrl || message.text);
   const attachmentName = message.fileName || (message.type === 'image' ? 'image' : 'attachment');
 
@@ -570,6 +701,57 @@ function MessageBubble({
           <span className={`text-xs ${isMine ? 'text-sky-700' : 'text-gray-400'}`}>{message.timestamp}</span>
           {isMine && <MessageStatus status={message.status} />}
         </div>
+      </div>
+
+      <div className="relative self-start">
+        <button
+          type="button"
+          onClick={() => setShowActions((prev) => !prev)}
+          className="w-6 h-6 rounded-full flex items-center justify-center text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-colors"
+          title="Message actions"
+        >
+          <ChevronDown size={14} />
+        </button>
+
+        {showActions && (
+          <div className={`absolute z-20 mt-1 w-44 rounded-xl border border-slate-200 bg-white shadow-lg p-1 ${isMine ? 'right-0' : 'left-0'}`}>
+            <button
+              type="button"
+              onClick={() => {
+                setShowActions(false);
+                onCopyMessage?.();
+              }}
+              className="w-full flex items-center gap-2 px-3 py-2 text-sm text-slate-700 hover:bg-slate-50 rounded-lg"
+            >
+              <Copy size={14} />
+              Copy
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setShowActions(false);
+                onDeleteForMe?.();
+              }}
+              className="w-full flex items-center gap-2 px-3 py-2 text-sm text-slate-700 hover:bg-slate-50 rounded-lg"
+            >
+              <Trash2 size={14} />
+              Delete for me
+            </button>
+            {isMine && (
+              <button
+                type="button"
+                onClick={() => {
+                  setShowActions(false);
+                  onDeleteForEveryone?.();
+                }}
+                className="w-full flex items-center gap-2 px-3 py-2 text-sm text-rose-600 hover:bg-rose-50 rounded-lg"
+              >
+                <Trash2 size={14} />
+                Delete for everyone
+              </button>
+            )}
+          </div>
+        )}
       </div>
     </div>
   );

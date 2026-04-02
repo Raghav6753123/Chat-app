@@ -57,7 +57,10 @@ export async function GET(request, context) {
     { $set: { unreadCount: 0 } }
   );
 
-  const messages = await Message.find({ conversationId }).sort({ createdAt: 1 }).lean();
+  const messages = await Message.find({
+    conversationId,
+    hiddenFor: { $ne: authUser._id },
+  }).sort({ createdAt: 1 }).lean();
   const senderIds = [...new Set(messages.map((message) => message.senderId.toString()))].map(
     (senderId) => new mongoose.Types.ObjectId(senderId)
   );

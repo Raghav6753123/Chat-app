@@ -1,5 +1,5 @@
 'use client';
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Toaster } from 'sonner';
 import { toast } from 'sonner';
@@ -16,6 +16,7 @@ export default function ChatDashboard() {
   const [currentUser, setCurrentUser] = useState(null);
   const [conversations, setConversations] = useState([]);
   const [messagesByConversation, setMessagesByConversation] = useState({});
+  const [typingByConversation, setTypingByConversation] = useState({});
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
@@ -142,22 +143,184 @@ export default function ChatDashboard() {
             };
           })
         );
+
+        if (incomingMessage.senderId) {
+          setTypingByConversation((prev) => {
+            const existing = prev[incomingConversationId];
+            if (!existing || !existing[incomingMessage.senderId]) {
+              return prev;
+            }
+
+            const nextConversationTyping = { ...existing };
+            delete nextConversationTyping[incomingMessage.senderId];
+
+            const next = { ...prev };
+            if (Object.keys(nextConversationTyping).length) {
+              next[incomingConversationId] = nextConversationTyping;
+            } else {
+              delete next[incomingConversationId];
+            }
+            return next;
+          });
+        }
+      };
+
+      const onDeletedMessage = (payload) => {
+        const incomingConversationId = payload?.conversationId;
+        const deletedMessageId = payload?.messageId;
+
+        if (!incomingConversationId || !deletedMessageId) {
+          return;
+        }
+
+        setMessagesByConversation((prev) => ({
+          ...prev,
+          [incomingConversationId]: (prev[incomingConversationId] || []).filter(
+            (message) => message.id !== deletedMessageId
+          ),
+        }));
+
+        setConversations((prev) =>
+          prev.map((conversation) => {
+            if (conversation.id !== incomingConversationId) {
+              return conversation;
+            }
+
+            return {
+              ...conversation,
+              lastMessage:
+                typeof payload?.lastMessage === 'string' && payload.lastMessage
+                  ? payload.lastMessage
+                  : conversation.lastMessage,
+              lastMessageTime:
+                typeof payload?.lastMessageTime === 'string' && payload.lastMessageTime
+                  ? payload.lastMessageTime
+                  : conversation.lastMessageTime,
+            };
+          })
+        );
+      };
+
+      const onTypingStatus = (payload) => {
+        const incomingConversationId = payload?.conversationId;
+        const userId = payload?.userId;
+        const userName = payload?.userName;
+        const isTyping = Boolean(payload?.isTyping);
+
+        if (!incomingConversationId || !userId || userId === currentUser?.id) {
+          return;
+        }
+
+        setTypingByConversation((prev) => {
+          const next = { ...prev };
+          const existing = { ...(next[incomingConversationId] || {}) };
+
+          if (isTyping) {
+            existing[userId] = userName || 'Someone';
+            next[incomingConversationId] = existing;
+          } else {
+            delete existing[userId];
+            if (Object.keys(existing).length) {
+              next[incomingConversationId] = existing;
+            } else {
+              delete next[incomingConversationId];
+            }
+          }
+
+          return next;
+        });
+      };
+
+      const onGroupUpdated = (payload) => {
+        const incomingConversationId = payload?.conversationId;
+        if (!incomingConversationId) {
+          return;
+        }
+
+        setConversations((prev) =>
+          prev.map((conversation) =>
+            conversation.id === incomingConversationId
+              ? {
+                  ...conversation,
+                  members:
+                    typeof payload?.members === 'number'
+                      ? payload.members
+                      : conversation.members,
+                  lastMessage:
+                    typeof payload?.lastMessage === 'string' && payload.lastMessage
+                      ? payload.lastMessage
+                      : conversation.lastMessage,
+                  lastMessageTime:
+                    typeof payload?.lastMessageTime === 'string' && payload.lastMessageTime
+                      ? payload.lastMessageTime
+                      : conversation.lastMessageTime,
+                }
+              : conversation
+          )
+        );
       };
 
       channel.bind('new-message', onIncomingMessage);
+      channel.bind('deleted-message', onDeletedMessage);
+      channel.bind('typing-status', onTypingStatus);
+      channel.bind('group-updated', onGroupUpdated);
 
       return {
         channelName,
         channel,
         onIncomingMessage,
+        onDeletedMessage,
+        onTypingStatus,
+        onGroupUpdated,
       };
     });
 
+    const userChannelName = `private-user-${currentUser.id}`;
+    const userChannel = pusherClient.subscribe(userChannelName);
+
+    const onConversationAdded = (payload) => {
+      const conversation = payload?.conversation;
+      if (!conversation?.id) {
+        return;
+      }
+
+      setConversations((prev) => {
+        const existingIndex = prev.findIndex((item) => item.id === conversation.id);
+        if (existingIndex >= 0) {
+          const next = [...prev];
+          next[existingIndex] = {
+            ...next[existingIndex],
+            ...conversation,
+          };
+          return next;
+        }
+
+        return [conversation, ...prev];
+      });
+
+      toast.success(`Added to ${conversation.name}`);
+    };
+
+    userChannel.bind('conversation-added', onConversationAdded);
+
     return () => {
-      subscriptions.forEach(({ channelName, channel, onIncomingMessage }) => {
+      subscriptions.forEach(({
+        channelName,
+        channel,
+        onIncomingMessage,
+        onDeletedMessage,
+        onTypingStatus,
+        onGroupUpdated,
+      }) => {
         channel.unbind('new-message', onIncomingMessage);
+        channel.unbind('deleted-message', onDeletedMessage);
+        channel.unbind('typing-status', onTypingStatus);
+        channel.unbind('group-updated', onGroupUpdated);
         pusherClient.unsubscribe(channelName);
       });
+
+      userChannel.unbind('conversation-added', onConversationAdded);
+      pusherClient.unsubscribe(userChannelName);
     };
   }, [activeConversationId, conversationIdKey, conversationIdList, currentUser?.id]);
 
@@ -200,6 +363,15 @@ export default function ChatDashboard() {
             : conversation
         )
       );
+
+      setTypingByConversation((prev) => {
+        if (!prev[conversationId]) {
+          return prev;
+        }
+        const next = { ...prev };
+        delete next[conversationId];
+        return next;
+      });
     } catch {
       // Keep existing UI state if message fetch fails.
     }
@@ -240,6 +412,39 @@ export default function ChatDashboard() {
           : conversation
       )
     );
+  };
+
+  const handleMessageDeleted = (conversationId, messageId, options = {}) => {
+    setMessagesByConversation((prev) => ({
+      ...prev,
+      [conversationId]: (prev[conversationId] || []).filter((message) => message.id !== messageId),
+    }));
+
+    if (options.updateConversationSummary) {
+      setConversations((prev) =>
+        prev.map((conversation) =>
+          conversation.id === conversationId
+            ? {
+                ...conversation,
+                lastMessage: options.lastMessage ?? conversation.lastMessage,
+                lastMessageTime: options.lastMessageTime ?? conversation.lastMessageTime,
+              }
+            : conversation
+        )
+      );
+    }
+  };
+
+  const handleTypingStatusChange = async (conversationId, isTyping) => {
+    try {
+      await fetch(`/api/conversations/${conversationId}/typing`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ isTyping }),
+      });
+    } catch {
+      // Ignore typing transport errors to avoid noisy UX.
+    }
   };
 
   const handleCreateConversation = async ({ memberEmails, name, isGroup }) => {
@@ -347,6 +552,19 @@ export default function ChatDashboard() {
     }
   };
 
+  const handleConversationUpdated = useCallback((conversationId, updates) => {
+    setConversations((prev) =>
+      prev.map((conversation) =>
+        conversation.id === conversationId
+          ? {
+              ...conversation,
+              ...updates,
+            }
+          : conversation
+      )
+    );
+  }, []);
+
   return (
     <div className="h-screen flex bg-slate-50 overflow-hidden font-sans antialiased selection:bg-sky-200 selection:text-sky-900 transition-colors duration-300">
       <Toaster position="bottom-right" richColors toastOptions={{ className: 'rounded-xl shadow-lg border-0 bg-white/90 backdrop-blur-sm' }} />
@@ -379,8 +597,11 @@ export default function ChatDashboard() {
             key={activeConversation.id}
             conversation={activeConversation}
             currentUserId={currentUser?.id}
+            activeTypingUsers={Object.values(typingByConversation[activeConversation.id] || {})}
             onToggleInfo={() => setShowInfoPanel(!showInfoPanel)}
+            onTypingStatusChange={handleTypingStatusChange}
             onMessageSent={handleMessageSent}
+            onMessageDeleted={handleMessageDeleted}
             onConversationUnavailable={handleConversationUnavailable}
             showInfo={showInfoPanel}
           />
@@ -399,7 +620,9 @@ export default function ChatDashboard() {
         <div className="w-72 xl:w-80 shrink-0 bg-white border-l border-gray-100 flex flex-col h-full">
           <ContactInfoPanel
             conversation={activeConversation}
+            currentUserId={currentUser?.id}
             onPreferencesUpdated={handleConversationPreferencesUpdated}
+            onConversationUpdated={handleConversationUpdated}
             onConversationRemoved={handleConversationRemoved}
             onClose={() => setShowInfoPanel(false)}
           />

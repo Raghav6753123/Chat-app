@@ -29,6 +29,10 @@ const messageSchema = new Schema(
     fileName: { type: String, default: '' },
     fileSize: { type: String, default: '' },
     duration: { type: String, default: '' },
+    hiddenFor: {
+      type: [{ type: Schema.Types.ObjectId, ref: 'User' }],
+      default: [],
+    },
     replyToId: {
       type: Schema.Types.ObjectId,
       ref: 'Message',

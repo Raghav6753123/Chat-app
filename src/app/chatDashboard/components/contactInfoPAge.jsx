@@ -1,9 +1,25 @@
 'use client';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import AppImage from '@/components/ui/AppImage';
 import {
-  X, Bell, BellOff, Ban, Trash2, ChevronDown, ChevronUp, Pin,
-  Phone, Video, Mail, Users, Image as ImageIcon, FileText, Link2
+  X,
+  Bell,
+  BellOff,
+  Ban,
+  Trash2,
+  ChevronDown,
+  ChevronUp,
+  Pin,
+  Phone,
+  Video,
+  Mail,
+  Users,
+  Image as ImageIcon,
+  FileText,
+  Link2,
+  UserPlus,
+  UserMinus,
+  Save,
 } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -11,8 +27,10 @@ const SHARED_PAGE_SIZE = 24;
 
 export default function ContactInfoPanel({
   conversation,
+  currentUserId,
   onClose,
   onPreferencesUpdated,
+  onConversationUpdated,
   onConversationRemoved,
 }) {
   const [showMedia, setShowMedia] = useState(true);
@@ -29,9 +47,40 @@ export default function ContactInfoPanel({
     totalCount: 0,
   });
 
+  const [members, setMembers] = useState([]);
+  const [isLoadingMembers, setIsLoadingMembers] = useState(false);
+  const [memberEmailsInput, setMemberEmailsInput] = useState('');
+  const [isAddingMembers, setIsAddingMembers] = useState(false);
+  const [groupNameDraft, setGroupNameDraft] = useState(conversation.name || '');
+  const [isSavingGroupName, setIsSavingGroupName] = useState(false);
+
+  const canManageGroup = Boolean(conversation.isGroup && conversation.canManageGroup);
+
+  const sortedMembers = useMemo(() => {
+    if (!members.length) {
+      return [];
+    }
+
+    const roleWeight = {
+      owner: 0,
+      admin: 1,
+      member: 2,
+    };
+
+    return [...members].sort((a, b) => {
+      const roleA = roleWeight[a.role] ?? 2;
+      const roleB = roleWeight[b.role] ?? 2;
+      if (roleA !== roleB) {
+        return roleA - roleB;
+      }
+      return a.name.localeCompare(b.name);
+    });
+  }, [members]);
+
   useEffect(() => {
     setIsMuted(conversation.isMuted);
     setIsPinned(conversation.isPinned);
+    setGroupNameDraft(conversation.name || '');
   }, [conversation]);
 
   const loadShared = useCallback(async ({ skip = 0, append = false } = {}) => {
@@ -72,9 +121,44 @@ export default function ContactInfoPanel({
     }
   }, [conversation.id]);
 
+  const loadMembers = useCallback(async () => {
+    if (!conversation.isGroup) {
+      setMembers([]);
+      return;
+    }
+
+    setIsLoadingMembers(true);
+
+    try {
+      const response = await fetch(`/api/conversations/${conversation.id}/members`);
+      const payload = await response.json();
+
+      if (!response.ok) {
+        throw new Error(payload.error || 'Failed to load group members');
+      }
+
+      setMembers(payload.members || []);
+      const nextCount = (payload.members || []).length;
+      if (nextCount !== Number(conversation.members || 0)) {
+        onConversationUpdated?.(conversation.id, {
+          members: nextCount,
+        });
+      }
+    } catch (error) {
+      setMembers([]);
+      toast.error(error.message || 'Failed to load group members');
+    } finally {
+      setIsLoadingMembers(false);
+    }
+  }, [conversation.id, conversation.isGroup, conversation.members, onConversationUpdated]);
+
   useEffect(() => {
     loadShared({ skip: 0, append: false });
   }, [loadShared]);
+
+  useEffect(() => {
+    loadMembers();
+  }, [loadMembers]);
 
   const handleLoadMoreShared = async () => {
     if (!sharedPagination.hasMore || isLoadingMoreShared) {
@@ -163,10 +247,130 @@ export default function ContactInfoPanel({
     }
   };
 
+  const handleSaveGroupName = async () => {
+    const nextName = groupNameDraft.trim();
+    if (!nextName) {
+      toast.error('Group name is required');
+      return;
+    }
+
+    if (nextName === conversation.name) {
+      return;
+    }
+
+    setIsSavingGroupName(true);
+    try {
+      const response = await fetch(`/api/conversations/${conversation.id}`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ name: nextName }),
+      });
+
+      const payload = await response.json();
+
+      if (!response.ok) {
+        throw new Error(payload.error || 'Failed to update group name');
+      }
+
+      onConversationUpdated?.(conversation.id, {
+        name: payload.conversation?.name || nextName,
+      });
+      toast.success('Group name updated');
+    } catch (error) {
+      toast.error(error.message || 'Unable to update group name');
+    } finally {
+      setIsSavingGroupName(false);
+    }
+  };
+
+  const handleAddMembers = async () => {
+    if (!canManageGroup) {
+      toast.error('You do not have permission to add members');
+      return;
+    }
+
+    const emails = memberEmailsInput
+      .split(/[\n,]/)
+      .map((email) => email.toLowerCase().trim())
+      .filter(Boolean);
+
+    if (!emails.length) {
+      toast.error('Enter at least one email');
+      return;
+    }
+
+    setIsAddingMembers(true);
+
+    try {
+      const response = await fetch(`/api/conversations/${conversation.id}/members`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ memberEmails: emails }),
+      });
+
+      const payload = await response.json();
+
+      if (!response.ok) {
+        throw new Error(payload.error || 'Failed to add members');
+      }
+
+      const addedCount = payload.added || 0;
+      if (!addedCount) {
+        toast.info('All selected users are already in the group');
+      } else {
+        toast.success(`${addedCount} member${addedCount > 1 ? 's' : ''} added`);
+      }
+
+      setMemberEmailsInput('');
+      await loadMembers();
+    } catch (error) {
+      toast.error(error.message || 'Unable to add members');
+    } finally {
+      setIsAddingMembers(false);
+    }
+  };
+
+  const handleRemoveMember = async (member) => {
+    const canRemoveThisMember = member.userId === currentUserId || canManageGroup;
+    if (!canRemoveThisMember) {
+      toast.error('You do not have permission to remove this member');
+      return;
+    }
+
+    try {
+      const response = await fetch(
+        `/api/conversations/${conversation.id}/members?userId=${encodeURIComponent(member.userId)}`,
+        {
+          method: 'DELETE',
+        }
+      );
+      const payload = await response.json();
+
+      if (!response.ok) {
+        throw new Error(payload.error || 'Failed to remove member');
+      }
+
+      if (member.userId === currentUserId) {
+        onConversationRemoved?.(conversation.id);
+        onClose();
+        toast.success('You left the group');
+        return;
+      }
+
+      toast.success(`${member.name} removed from group`);
+      await loadMembers();
+    } catch (error) {
+      toast.error(error.message || 'Unable to remove member');
+    }
+  };
+
   return (
     <div className="flex flex-col h-full overflow-y-auto chat-scrollbar">
-      {/* Header */}
-      <div className="px-4 py-3 border-b border-gray-100 flex items-center justify-between flex-shrink-0">
+      <div className="px-4 py-3 border-b border-gray-100 flex items-center justify-between shrink-0">
         <p className="text-sm font-700 text-gray-900">
           {conversation.isGroup ? 'Group info' : 'Contact info'}
         </p>
@@ -178,7 +382,6 @@ export default function ContactInfoPanel({
         </button>
       </div>
 
-      {/* Profile section */}
       <div className="flex flex-col items-center gap-3 px-6 py-6 border-b border-gray-50">
         <div className="relative">
           <div className="w-20 h-20 rounded-full overflow-hidden bg-gray-100 ring-4 ring-sky-100">
@@ -195,10 +398,31 @@ export default function ContactInfoPanel({
           )}
         </div>
 
-        <div className="text-center">
-          <p className="text-base font-700 text-gray-900">{conversation.name}</p>
+        <div className="text-center w-full">
+          {conversation.isGroup && canManageGroup ? (
+            <div className="flex items-center gap-2">
+              <input
+                value={groupNameDraft}
+                onChange={(e) => setGroupNameDraft(e.target.value)}
+                className="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-400/40"
+                placeholder="Group name"
+              />
+              <button
+                type="button"
+                onClick={handleSaveGroupName}
+                disabled={isSavingGroupName}
+                className="px-3 py-2 rounded-xl bg-sky-500 text-white hover:bg-sky-600 disabled:bg-sky-300"
+                title="Save group name"
+              >
+                <Save size={14} />
+              </button>
+            </div>
+          ) : (
+            <p className="text-base font-700 text-gray-900">{conversation.name}</p>
+          )}
+
           {conversation.isGroup ? (
-            <p className="text-xs text-gray-400 mt-0.5">{conversation.members} members</p>
+            <p className="text-xs text-gray-400 mt-1">{conversation.members} members</p>
           ) : (
             <p className={`text-xs mt-0.5 font-500 ${conversation.isOnline ? 'text-emerald-500' : 'text-gray-400'}`}>
               {conversation.isOnline ? 'Online now' : conversation.lastSeen ?? 'Offline'}
@@ -206,7 +430,6 @@ export default function ContactInfoPanel({
           )}
         </div>
 
-        {/* Quick actions */}
         <div className="flex items-center gap-3 mt-1">
           <button
             onClick={() => toast.info('Voice call starting...')}
@@ -237,43 +460,100 @@ export default function ContactInfoPanel({
           </button>
           {conversation.isGroup && (
             <button
-              onClick={() => toast.info('Group members list coming soon')}
+              onClick={loadMembers}
               className="flex flex-col items-center gap-1 group"
             >
               <div className="w-10 h-10 bg-sky-50 hover:bg-sky-100 rounded-xl flex items-center justify-center transition-colors duration-150 group-active:scale-95">
                 <Users size={18} className="text-sky-600" />
               </div>
-              <span className="text-xs text-gray-400 group-hover:text-gray-600">Members</span>
+              <span className="text-xs text-gray-400 group-hover:text-gray-600">Refresh</span>
             </button>
           )}
         </div>
       </div>
 
-      {/* About / Bio */}
+      {conversation.isGroup && (
+        <div className="px-4 py-4 border-b border-gray-50 space-y-3">
+          <p className="text-xs font-600 text-gray-400 uppercase tracking-widest">Members</p>
+
+          {canManageGroup && (
+            <div className="space-y-2">
+              <textarea
+                rows={2}
+                value={memberEmailsInput}
+                onChange={(e) => setMemberEmailsInput(e.target.value)}
+                placeholder="Add by email, comma or new line separated"
+                className="w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-sky-400/40 resize-none"
+              />
+              <button
+                type="button"
+                onClick={handleAddMembers}
+                disabled={isAddingMembers}
+                className="w-full rounded-xl bg-sky-500 text-white px-3 py-2 text-sm font-600 hover:bg-sky-600 disabled:bg-sky-300 flex items-center justify-center gap-2"
+              >
+                <UserPlus size={14} />
+                {isAddingMembers ? 'Adding...' : 'Add members'}
+              </button>
+            </div>
+          )}
+
+          <div className="max-h-60 overflow-y-auto rounded-xl border border-slate-100">
+            {isLoadingMembers ? (
+              <p className="px-3 py-6 text-center text-xs text-gray-400">Loading members...</p>
+            ) : sortedMembers.length === 0 ? (
+              <p className="px-3 py-6 text-center text-xs text-gray-400">No members found</p>
+            ) : (
+              sortedMembers.map((member) => {
+                const canRemove = member.userId === currentUserId || canManageGroup;
+                return (
+                  <div
+                    key={member.id}
+                    className="px-3 py-2.5 border-b border-slate-100 last:border-b-0 flex items-center gap-3"
+                  >
+                    <div className="w-8 h-8 rounded-full overflow-hidden bg-slate-100">
+                      <AppImage
+                        src={member.avatarUrl || `https://i.pravatar.cc/48?u=${encodeURIComponent(member.email)}`}
+                        alt={`${member.name} avatar`}
+                        width={32}
+                        height={32}
+                        className="w-full h-full object-cover"
+                      />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-600 text-slate-800 truncate">{member.name}</p>
+                      <p className="text-xs text-slate-500 truncate">{member.email}</p>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-[11px] px-2 py-0.5 rounded-full bg-slate-100 text-slate-600 uppercase">
+                        {member.role || 'member'}
+                      </span>
+                      {canRemove && (
+                        <button
+                          type="button"
+                          onClick={() => handleRemoveMember(member)}
+                          className="p-1.5 rounded-lg text-red-500 hover:bg-red-50"
+                          title={member.userId === currentUserId ? 'Leave group' : 'Remove member'}
+                        >
+                          <UserMinus size={13} />
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                );
+              })
+            )}
+          </div>
+        </div>
+      )}
+
       {!conversation.isGroup && (
         <div className="px-4 py-4 border-b border-gray-50">
           <p className="text-xs font-600 text-gray-400 uppercase tracking-widest mb-2">About</p>
-          <p className="text-sm text-gray-600 leading-relaxed">
-            Hey there! I am using ChatApp 🙌
-          </p>
-          <p className="text-xs text-gray-400 mt-1.5">
-            Joined March 2024
-          </p>
+          <p className="text-sm text-gray-600 leading-relaxed">Hey there! I am using ChatApp.</p>
+          <p className="text-xs text-gray-400 mt-1.5">Joined March 2024</p>
         </div>
       )}
 
-      {/* Group description */}
-      {conversation.isGroup && (
-        <div className="px-4 py-4 border-b border-gray-50">
-          <p className="text-xs font-600 text-gray-400 uppercase tracking-widest mb-2">Description</p>
-          <p className="text-sm text-gray-600 leading-relaxed">
-            Daily standup coordination, sprint planning, and async updates for the core engineering team.
-          </p>
-          <p className="text-xs text-gray-400 mt-1.5">Created by Arjun Mehta · Jan 2026</p>
-        </div>
-      )}
-
-      {/* Shared media */}
       <div className="border-b border-gray-50">
         <button
           onClick={() => setShowMedia(!showMedia)}
@@ -324,7 +604,6 @@ export default function ContactInfoPanel({
         )}
       </div>
 
-      {/* Shared files */}
       <div className="border-b border-gray-50">
         <button
           onClick={() => setShowFiles(!showFiles)}
@@ -357,14 +636,14 @@ export default function ContactInfoPanel({
                 }}
                 className="flex items-center gap-3 p-2.5 rounded-xl hover:bg-gray-50 transition-colors duration-150 text-left group"
               >
-                <div className="w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0 text-sky-500 bg-sky-50">
+                <div className="w-9 h-9 rounded-lg flex items-center justify-center shrink-0 text-sky-500 bg-sky-50">
                   <FileText size={16} />
                 </div>
                 <div className="flex-1 min-w-0">
                   <p className="text-xs font-600 text-gray-800 truncate">{file.name}</p>
                   <p className="text-xs text-gray-400">{file.size || 'Unknown size'} - {file.date}</p>
                 </div>
-                <Link2 size={13} className="text-gray-300 group-hover:text-sky-500 transition-colors flex-shrink-0" />
+                <Link2 size={13} className="text-gray-300 group-hover:text-sky-500 transition-colors shrink-0" />
               </button>
             ))}
             {(sharedPagination.hasMore || isLoadingMoreShared) && (
@@ -380,7 +659,6 @@ export default function ContactInfoPanel({
         )}
       </div>
 
-      {/* Privacy actions */}
       <div className="px-4 py-4 flex flex-col gap-2">
         <p className="text-xs font-600 text-gray-400 uppercase tracking-widest mb-1">Privacy</p>
 
@@ -388,7 +666,7 @@ export default function ContactInfoPanel({
           onClick={toggleMute}
           className="flex items-center gap-3 px-3 py-2.5 rounded-xl hover:bg-gray-50 transition-colors duration-150 text-left group"
         >
-          <div className={`w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 ${
+          <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${
             isMuted ? 'bg-amber-50' : 'bg-gray-100'
           }`}>
             {isMuted
@@ -408,7 +686,7 @@ export default function ContactInfoPanel({
           onClick={togglePin}
           className="flex items-center gap-3 px-3 py-2.5 rounded-xl hover:bg-gray-50 transition-colors duration-150 text-left group"
         >
-          <div className={`w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 ${
+          <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${
             isPinned ? 'bg-sky-50' : 'bg-gray-100'
           }`}>
             <Pin size={15} className={isPinned ? 'text-sky-600' : 'text-gray-500'} />
@@ -425,7 +703,7 @@ export default function ContactInfoPanel({
           onClick={() => (conversation.isGroup ? handleLeaveGroup() : toast.warning('Block feature coming soon'))}
           className="flex items-center gap-3 px-3 py-2.5 rounded-xl hover:bg-red-50 transition-colors duration-150 text-left group"
         >
-          <div className="w-8 h-8 bg-red-50 rounded-lg flex items-center justify-center flex-shrink-0">
+          <div className="w-8 h-8 bg-red-50 rounded-lg flex items-center justify-center shrink-0">
             <Ban size={15} className="text-red-500" />
           </div>
           <p className="text-sm font-500 text-red-600">
@@ -437,7 +715,7 @@ export default function ContactInfoPanel({
           onClick={handleDeleteConversation}
           className="flex items-center gap-3 px-3 py-2.5 rounded-xl hover:bg-red-50 transition-colors duration-150 text-left group"
         >
-          <div className="w-8 h-8 bg-red-50 rounded-lg flex items-center justify-center flex-shrink-0">
+          <div className="w-8 h-8 bg-red-50 rounded-lg flex items-center justify-center shrink-0">
             <Trash2 size={15} className="text-red-500" />
           </div>
           <p className="text-sm font-500 text-red-600">Delete conversation</p>

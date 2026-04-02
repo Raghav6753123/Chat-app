@@ -20,6 +20,7 @@ export default function ConversationList({
   const [activeFilter, setActiveFilter] = useState('all');
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [userSearch, setUserSearch] = useState('');
+  const [createMode, setCreateMode] = useState('direct');
   const [availableUsers, setAvailableUsers] = useState([]);
   const [selectedEmails, setSelectedEmails] = useState([]);
   const [groupName, setGroupName] = useState('');
@@ -103,6 +104,7 @@ export default function ConversationList({
   const resetCreateState = () => {
     setShowCreateModal(false);
     setUserSearch('');
+    setCreateMode('direct');
     setAvailableUsers([]);
     setSelectedEmails([]);
     setGroupName('');
@@ -115,7 +117,12 @@ export default function ConversationList({
       return;
     }
 
-    const isGroup = selectedEmails.length > 1;
+    const isGroup = createMode === 'group';
+    if (!isGroup && selectedEmails.length > 1) {
+      toast.error('Direct messages support only one participant');
+      return;
+    }
+
     if (isGroup && !groupName.trim()) {
       toast.error('Please enter a group name');
       return;
@@ -282,7 +289,7 @@ export default function ConversationList({
 
       {/* Bottom user profile */}
       <div className="border-t border-gray-100 px-4 py-3 flex items-center gap-3">
-        <div className="relative flex-shrink-0">
+        <div className="relative shrink-0">
           <div className="w-9 h-9 rounded-full bg-sky-100 flex items-center justify-center">
             <span className="text-sm font-700 text-sky-600">
               {(currentUser?.name || 'User')
@@ -321,6 +328,34 @@ export default function ConversationList({
 
             <div className="px-5 py-4 space-y-4">
               <div>
+                <label className="text-xs font-600 uppercase tracking-wide text-slate-500">Conversation type</label>
+                <div className="mt-1 grid grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setCreateMode('direct')}
+                    className={`rounded-xl border px-3 py-2 text-sm font-600 transition-colors ${
+                      createMode === 'direct'
+                        ? 'border-sky-500 bg-sky-50 text-sky-700'
+                        : 'border-slate-200 text-slate-600 hover:bg-slate-50'
+                    }`}
+                  >
+                    Direct
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setCreateMode('group')}
+                    className={`rounded-xl border px-3 py-2 text-sm font-600 transition-colors ${
+                      createMode === 'group'
+                        ? 'border-sky-500 bg-sky-50 text-sky-700'
+                        : 'border-slate-200 text-slate-600 hover:bg-slate-50'
+                    }`}
+                  >
+                    Group
+                  </button>
+                </div>
+              </div>
+
+              <div>
                 <label className="text-xs font-600 uppercase tracking-wide text-slate-500">Search users</label>
                 <input
                   value={userSearch}
@@ -330,7 +365,7 @@ export default function ConversationList({
                 />
               </div>
 
-              {selectedEmails.length > 1 && (
+              {createMode === 'group' && (
                 <div>
                   <label className="text-xs font-600 uppercase tracking-wide text-slate-500">Group name</label>
                   <input
@@ -352,7 +387,16 @@ export default function ConversationList({
                       <button
                         key={user.id}
                         type="button"
-                        onClick={() => toggleUserSelection(user.email)}
+                        onClick={() => {
+                          if (createMode === 'direct') {
+                            setSelectedEmails((prev) =>
+                              prev.includes(user.email) ? [] : [user.email]
+                            );
+                            return;
+                          }
+
+                          toggleUserSelection(user.email);
+                        }}
                         className={`w-full px-4 py-3 text-left flex items-center gap-3 border-b border-slate-100 last:border-b-0 ${
                           selected ? 'bg-sky-50' : 'hover:bg-slate-50'
                         }`}
@@ -693,7 +737,7 @@ function ConversationItem({
       }`}
     >
       {/* Avatar */}
-      <div className="relative flex-shrink-0">
+      <div className="relative shrink-0">
         <div className="w-11 h-11 rounded-full overflow-hidden bg-gray-100">
           <AppImage
             src={c.avatar}
@@ -722,10 +766,10 @@ function ConversationItem({
             <span className={`text-sm truncate ${c.unreadCount > 0 ? 'font-700 text-gray-900' : 'font-500 text-gray-800'}`}>
               {c.name}
             </span>
-            {c.isMuted && <BellOff size={11} className="text-gray-400 flex-shrink-0" />}
-            {c.isPinned && <Pin size={11} className="text-sky-400 flex-shrink-0" />}
+            {c.isMuted && <BellOff size={11} className="text-gray-400 shrink-0" />}
+            {c.isPinned && <Pin size={11} className="text-sky-400 shrink-0" />}
           </div>
-          <span className={`text-xs flex-shrink-0 ${c.unreadCount > 0 ? 'text-sky-600 font-600' : 'text-gray-400'}`}>
+          <span className={`text-xs shrink-0 ${c.unreadCount > 0 ? 'text-sky-600 font-600' : 'text-gray-400'}`}>
             {c.lastMessageTime}
           </span>
         </div>
@@ -734,7 +778,7 @@ function ConversationItem({
             {c.lastMessage}
           </p>
           {c.unreadCount > 0 && (
-            <span className="flex-shrink-0 w-5 h-5 bg-sky-500 text-white text-xs font-700 rounded-full flex items-center justify-center tabular-nums">
+            <span className="shrink-0 w-5 h-5 bg-sky-500 text-white text-xs font-700 rounded-full flex items-center justify-center tabular-nums">
               {c.unreadCount > 9 ? '9+' : c.unreadCount}
             </span>
           )}
