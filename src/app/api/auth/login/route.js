@@ -43,6 +43,12 @@ export async function POST(request) {
         name: user.name,
         email: user.email,
         avatarUrl: user.avatarUrl,
+        bio: user.bio || '',
+        settings: {
+          desktopNotifications: user.settings?.desktopNotifications ?? true,
+          enterToSend: user.settings?.enterToSend ?? true,
+          compactMode: user.settings?.compactMode ?? false,
+        },
       },
     });
 

@@ -2,6 +2,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Toaster } from 'sonner';
+import { toast } from 'sonner';
 import ConversationList from './convoList';
 import ChatWindow from './chatWindow';
 import ContactInfoPanel from './contactInfoPAge';
@@ -126,6 +127,72 @@ export default function ChatDashboard() {
     );
   };
 
+  const handleCreateConversation = async ({ memberEmails, name, isGroup }) => {
+    const emails = Array.isArray(memberEmails)
+      ? memberEmails.map((email) => String(email).toLowerCase().trim()).filter(Boolean)
+      : [];
+
+    if (!emails.length) {
+      toast.error('Please choose at least one participant');
+      return { ok: false };
+    }
+
+    if (isGroup && !String(name || '').trim()) {
+      toast.error('Group name is required for group chats');
+      return { ok: false };
+    }
+
+    try {
+      const response = await fetch('/api/conversations', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          isGroup,
+          name: String(name || '').trim(),
+          memberEmails: emails,
+        }),
+      });
+
+      const payload = await response.json();
+
+      if (!response.ok) {
+        toast.error(payload.error || 'Failed to create conversation');
+        return { ok: false, error: payload.error || 'Failed to create conversation' };
+      }
+
+      if (payload.conversation) {
+        setConversations((prev) => {
+          const existing = prev.find((conversation) => conversation.id === payload.conversation.id);
+          if (existing) {
+            return prev;
+          }
+          return [payload.conversation, ...prev];
+        });
+        setActiveConversationId(payload.conversation.id);
+      }
+
+      toast.success(payload.existed ? 'Opened existing conversation' : 'Conversation created');
+      return { ok: true };
+    } catch {
+      toast.error('Unable to create conversation right now');
+      return { ok: false, error: 'Unable to create conversation right now' };
+    }
+  };
+
+  const handleLogout = async () => {
+    try {
+      await fetch('/api/auth/logout', { method: 'POST' });
+    } finally {
+      router.replace('/signup-login-screen');
+    }
+  };
+
+  const handleCurrentUserUpdated = (nextUser) => {
+    setCurrentUser(nextUser);
+  };
+
   return (
     <div className="h-screen flex bg-slate-50 overflow-hidden font-sans antialiased selection:bg-sky-200 selection:text-sky-900 transition-colors duration-300">
       <Toaster position="bottom-right" richColors toastOptions={{ className: 'rounded-xl shadow-lg border-0 bg-white/90 backdrop-blur-sm' }} />
@@ -136,8 +203,12 @@ export default function ChatDashboard() {
           conversations={filteredConversations}
           activeId={activeConversationId}
           onSelect={handleSelectConversation}
+          onCreateConversation={handleCreateConversation}
+          onLogout={handleLogout}
+          onCurrentUserUpdated={handleCurrentUserUpdated}
           searchQuery={searchQuery}
           onSearchChange={setSearchQuery}
+          currentUser={currentUser}
         />
       </div>
 
