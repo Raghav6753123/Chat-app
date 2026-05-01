@@ -17,9 +17,11 @@ const messageSchema = new Schema(
     text: { type: String, default: '' },
     type: {
       type: String,
-      enum: ['text', 'image', 'file', 'voice'],
+      enum: ['text', 'image', 'file', 'voice', 'call_log'],
       default: 'text',
     },
+    callType: { type: String, enum: ['voice', 'video'], default: null },
+    callStatus: { type: String, enum: ['missed', 'completed', 'cancelled'], default: null },
     status: {
       type: String,
       enum: ['sending', 'sent', 'delivered', 'read'],

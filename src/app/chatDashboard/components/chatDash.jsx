@@ -3,6 +3,18 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Toaster } from 'sonner';
 import { toast } from 'sonner';
+import {
+  Camera,
+  CameraOff,
+  Mic,
+  MicOff,
+  Phone,
+  PhoneCall,
+  PhoneIncoming,
+  PhoneOff,
+  Video,
+  X,
+} from 'lucide-react';
 import ConversationList from './convoList';
 import ChatWindow from './chatWindow';
 import ContactInfoPanel from './contactInfoPAge';
@@ -18,6 +30,9 @@ export default function ChatDashboard() {
   const [messagesByConversation, setMessagesByConversation] = useState({});
   const [typingByConversation, setTypingByConversation] = useState({});
   const [isLoading, setIsLoading] = useState(true);
+  const [incomingCall, setIncomingCall] = useState(null);
+  const [activeCall, setActiveCall] = useState(null);
+  const [callLogsRefreshKey, setCallLogsRefreshKey] = useState(0);
 
   useEffect(() => {
     let mounted = true;

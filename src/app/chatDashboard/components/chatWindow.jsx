@@ -777,6 +777,24 @@ function MessageBubble({
               )}
             </div>
           </div>
+        ) : message.type === 'call_log' ? (
+          <div className="flex items-center justify-center my-3 w-full max-w-[280px]">
+            <div className="bg-gray-100/80 rounded-2xl px-4 py-2 flex items-center gap-3">
+              <div className={`w-8 h-8 rounded-full flex items-center justify-center ${
+                message.callStatus === 'missed' ? 'bg-red-100 text-red-500' : 'bg-emerald-100 text-emerald-600'
+              }`}>
+                {message.callType === 'video' ? <Video size={14} /> : <Phone size={14} />}
+              </div>
+              <div className="flex flex-col">
+                <span className="text-xs font-semibold text-gray-800">
+                  {message.callStatus === 'missed' ? 'Missed call' : 'Call ended'}
+                </span>
+                <span className="text-[10px] text-gray-500">
+                  {message.duration || '0s'}
+                </span>
+              </div>
+            </div>
+          </div>
         ) : (
           <div className={`px-4 py-2.5 shadow-sm ${
             isMine ? 'message-bubble-sent' : 'message-bubble-received'

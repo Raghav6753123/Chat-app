@@ -57,8 +57,9 @@ export async function POST(request) {
 
     return withAuthCookie(response, token);
   } catch (error) {
+    console.error('[Login Error]:', error);
     return NextResponse.json(
-      { error: 'Failed to log in' },
+      { error: error.message || 'Failed to log in' },
       { status: 500 }
     );
   }
