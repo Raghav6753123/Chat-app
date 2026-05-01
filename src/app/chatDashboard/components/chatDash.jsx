@@ -18,6 +18,7 @@ import {
 import ConversationList from './convoList';
 import ChatWindow from './chatWindow';
 import ContactInfoPanel from './contactInfoPAge';
+import CallOverlay from './CallOverlay';
 import { getPusherClient } from '@/lib/pusher-client';
 
 export default function ChatDashboard() {
@@ -307,6 +308,17 @@ export default function ChatDashboard() {
       channel.bind('message-edited', onMessageEdited);
       channel.bind('message-reaction', onMessageReaction);
 
+      const onCallSignal = (payload) => {
+        if (payload.senderId === currentUser?.id) return;
+        if (payload.signalType === 'offer') {
+          setIncomingCall({ ...payload });
+        } else if (payload.signalType === 'end' || payload.signalType === 'reject') {
+          setIncomingCall(null);
+          setActiveCall(null);
+        }
+      };
+      channel.bind('call-signal', onCallSignal);
+
       return {
         channelName,
         channel,
@@ -316,6 +328,7 @@ export default function ChatDashboard() {
         onGroupUpdated,
         onMessageEdited,
         onMessageReaction,
+        onCallSignal,
       };
     });
 
@@ -357,6 +370,7 @@ export default function ChatDashboard() {
         onGroupUpdated,
         onMessageEdited,
         onMessageReaction,
+        onCallSignal,
       }) => {
         channel.unbind('new-message', onIncomingMessage);
         channel.unbind('deleted-message', onDeletedMessage);
@@ -364,6 +378,7 @@ export default function ChatDashboard() {
         channel.unbind('group-updated', onGroupUpdated);
         channel.unbind('message-edited', onMessageEdited);
         channel.unbind('message-reaction', onMessageReaction);
+        channel.unbind('call-signal', onCallSignal);
         pusherClient.unsubscribe(channelName);
       });
 
@@ -631,9 +646,60 @@ export default function ChatDashboard() {
     );
   }, []);
 
+  const handleStartCall = (conversationId, callType) => {
+    setActiveCall({ type: 'outgoing', conversationId, callType, callId: Date.now().toString() });
+  };
+
+  const handleAcceptCall = () => {
+    setActiveCall({ ...incomingCall, type: 'incoming' });
+    setIncomingCall(null);
+  };
+
+  const handleRejectCall = () => {
+    setIncomingCall(null);
+  };
+
+  const handleEndCall = async (status, durationSeconds = 0) => {
+    const callToLog = activeCall || incomingCall;
+    setActiveCall(null);
+    setIncomingCall(null);
+
+    // Log the call if caller or if we want to log it
+    if (callToLog && callToLog.type === 'outgoing') {
+      const minutes = Math.floor(durationSeconds / 60);
+      const seconds = durationSeconds % 60;
+      const durationText = `${minutes}m ${seconds}s`;
+
+      try {
+        await fetch('/api/calls/log', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            conversationId: callToLog.conversationId,
+            callType: callToLog.callType,
+            callStatus: status, // 'completed', 'missed', 'cancelled'
+            durationText,
+          }),
+        });
+      } catch (err) {
+        console.error('Failed to log call', err);
+      }
+    }
+  };
+
   return (
     <div className="h-screen flex bg-slate-50 overflow-hidden font-sans antialiased selection:bg-sky-200 selection:text-sky-900 transition-colors duration-300">
       <Toaster position="bottom-right" richColors toastOptions={{ className: 'rounded-xl shadow-lg border-0 bg-white/90 backdrop-blur-sm' }} />
+
+      {/* Render CallOverlay ALWAYS */}
+      <CallOverlay
+        currentUser={currentUser}
+        activeCall={activeCall}
+        incomingCall={incomingCall}
+        onAccept={handleAcceptCall}
+        onReject={handleRejectCall}
+        onEndCall={handleEndCall}
+      />
 
       {/* Left — Conversation list */}
       <div className={`w-full md:w-80 xl:w-96 shrink-0 bg-white shadow-[1px_0_10px_-5px_rgba(0,0,0,0.1)] border-r border-slate-100 flex flex-col h-full z-10 transition-transform duration-300 ${activeConversationId ? 'hidden md:flex' : 'flex'}`}>
@@ -673,6 +739,7 @@ export default function ChatDashboard() {
             onConversationUnavailable={handleConversationUnavailable}
             onBack={() => { setActiveConversationId(null); setShowInfoPanel(false); }}
             showInfo={showInfoPanel}
+            onStartCall={handleStartCall}
           />
         ) : (
           <div className="flex h-full items-center justify-center px-6">
@@ -694,6 +761,7 @@ export default function ChatDashboard() {
             onConversationUpdated={handleConversationUpdated}
             onConversationRemoved={handleConversationRemoved}
             onClose={() => setShowInfoPanel(false)}
+            onStartCall={handleStartCall}
           />
         </div>
       )}

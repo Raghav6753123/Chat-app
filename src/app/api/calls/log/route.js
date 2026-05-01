@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { connectDB } from '@/lib/db';
 import { getAuthUserFromRequest } from '@/lib/auth';
-import { pusherServer } from '@/lib/pusher-server';
+import { getPusherServer } from '@/lib/pusher-server';
 import Conversation from '@/models/Conversation';
 import ConversationMember from '@/models/ConversationMember';
 import Message from '@/models/Message';
@@ -86,6 +86,7 @@ export async function POST(request) {
     };
 
     // Broadcast new message
+    const pusherServer = getPusherServer();
     await pusherServer.trigger(`private-conversation-${conversationId}`, 'new-message', {
       conversationId,
       message: serializedMessage,

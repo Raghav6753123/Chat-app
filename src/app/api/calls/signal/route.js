@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { connectDB } from '@/lib/db';
 import { getAuthUserFromRequest } from '@/lib/auth';
-import { pusherServer } from '@/lib/pusher-server';
+import { getPusherServer } from '@/lib/pusher-server';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -24,6 +24,7 @@ export async function POST(request) {
     // Forward the signal to the target user via a user-specific private channel or conversation channel.
     // We'll use the private-conversation channel to broadcast to participants, 
     // and the client will check targetUserId or senderId.
+    const pusherServer = getPusherServer();
     await pusherServer.trigger(`private-conversation-${conversationId}`, 'call-signal', {
       senderId: currentUser._id.toString(),
       senderName: currentUser.name,

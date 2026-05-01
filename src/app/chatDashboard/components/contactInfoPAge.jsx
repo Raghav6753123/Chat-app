@@ -32,6 +32,7 @@ export default function ContactInfoPanel({
   onPreferencesUpdated,
   onConversationUpdated,
   onConversationRemoved,
+  onStartCall,
 }) {
   const [showMedia, setShowMedia] = useState(true);
   const [showFiles, setShowFiles] = useState(true);
@@ -432,7 +433,7 @@ export default function ContactInfoPanel({
 
         <div className="flex items-center gap-3 mt-1">
           <button
-            onClick={() => toast.info('Voice call starting...')}
+            onClick={() => onStartCall?.(conversation.id, 'voice')}
             className="flex flex-col items-center gap-1 group"
           >
             <div className="w-10 h-10 bg-sky-50 hover:bg-sky-100 rounded-xl flex items-center justify-center transition-colors duration-150 group-active:scale-95">
@@ -441,7 +442,7 @@ export default function ContactInfoPanel({
             <span className="text-xs text-gray-400 group-hover:text-gray-600">Call</span>
           </button>
           <button
-            onClick={() => toast.info('Video call starting...')}
+            onClick={() => onStartCall?.(conversation.id, 'video')}
             className="flex flex-col items-center gap-1 group"
           >
             <div className="w-10 h-10 bg-sky-50 hover:bg-sky-100 rounded-xl flex items-center justify-center transition-colors duration-150 group-active:scale-95">
