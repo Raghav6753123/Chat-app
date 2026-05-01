@@ -2,7 +2,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import AppImage from '@/components/ui/AppImage';
 import AppLogo from '@/components/ui/AppLogo';
-import { Search, Plus, MoreVertical, Users, BellOff, Pin, X } from 'lucide-react';
+import { Search, Plus, MoreVertical, Users, BellOff, Pin, X, PhoneCall } from 'lucide-react';
 import Link from 'next/link';
 import { toast } from 'sonner';
 
@@ -17,7 +17,7 @@ export default function ConversationList({
   onSearchChange,
   currentUser,
 }) {
-  const [activeFilter, setActiveFilter] = useState('all');
+  const [activeFilter, setActiveFilter] = useState('all'); // all, unread, groups, calls
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [userSearch, setUserSearch] = useState('');
   const [createMode, setCreateMode] = useState('direct');
@@ -39,6 +39,7 @@ export default function ConversationList({
   const filtered = conversations.filter((c) => {
     if (activeFilter === 'unread') return c.unreadCount > 0;
     if (activeFilter === 'groups') return c.isGroup;
+    if (activeFilter === 'calls') return false; // Handled separately or we can show conversations with calls
     return true;
   });
 
@@ -240,6 +241,7 @@ export default function ConversationList({
             { key: 'all', label: 'All' },
             { key: 'unread', label: 'Unread' },
             { key: 'groups', label: 'Groups' },
+            { key: 'calls', label: 'Calls' },
           ].map((f) => (
             <button
               key={`filter-${f.key}`}
@@ -265,8 +267,13 @@ export default function ConversationList({
       )}
 
       {/* Conversation items */}
-      <div className="flex-1 overflow-y-auto chat-scrollbar">
-        {filtered.length === 0 ? (
+      <div className="flex-1 overflow-y-auto chat-scrollbar relative">
+        {activeFilter === 'calls' ? (
+          <CallHistoryView
+            conversations={conversations}
+            onSelect={onSelect}
+          />
+        ) : filtered.length === 0 ? (
           <div className="flex flex-col items-center justify-center h-48 gap-3 px-6">
             <div className="w-12 h-12 bg-gray-100 rounded-full flex items-center justify-center">
               <Search size={20} className="text-gray-400" />
@@ -732,7 +739,7 @@ function ConversationItem({
   return (
     <button
       onClick={() => onSelect(c.id)}
-      className={`w-full flex items-center gap-3 px-4 py-3 transition-all duration-150 text-left group relative ${
+      className={`w-full flex items-center gap-3 px-4 py-3 transition-all duration-150 text-left group relative border-b border-gray-50/50 last:border-b-0 ${
         isActive ? 'bg-sky-50' : 'hover:bg-gray-50'
       }`}
     >
@@ -785,5 +792,105 @@ function ConversationItem({
         </div>
       </div>
     </button>
+  );
+}
+
+function CallHistoryView({ conversations, onSelect }) {
+  const [calls, setCalls] = useState([]);
+  const [isLoading, setIsLoading] = useState(true);
+
+  useEffect(() => {
+    // Load all conversations' call logs. Since we don't have a global call list endpoint,
+    // we'll fetch from conversations the user is in. For a robust app, you'd add a /api/calls endpoint.
+    const fetchCalls = async () => {
+      try {
+        const fetchedCalls = [];
+        for (const conv of conversations) {
+          const res = await fetch(`/api/conversations/${conv.id}/calls`);
+          if (res.ok) {
+            const data = await res.json();
+            if (data.calls) {
+              const mappedCalls = data.calls.map(c => ({ ...c, conversationId: conv.id, convName: conv.name, convAvatar: conv.avatar }));
+              fetchedCalls.push(...mappedCalls);
+            }
+          }
+        }
+        
+        fetchedCalls.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+        setCalls(fetchedCalls);
+      } catch (err) {
+        console.error('Failed to load call history', err);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+    
+    if (conversations.length > 0) {
+      fetchCalls();
+    } else {
+      setIsLoading(false);
+    }
+  }, [conversations]);
+
+  if (isLoading) {
+    return (
+      <div className="flex flex-col items-center justify-center p-8 gap-3">
+        <div className="w-6 h-6 border-2 border-sky-200 border-t-sky-500 rounded-full animate-spin" />
+        <p className="text-sm text-gray-500">Loading call history...</p>
+      </div>
+    );
+  }
+
+  if (calls.length === 0) {
+    return (
+      <div className="flex flex-col items-center justify-center h-48 gap-3 px-6">
+        <div className="w-12 h-12 bg-gray-100 rounded-full flex items-center justify-center">
+          <PhoneCall size={20} className="text-gray-400" />
+        </div>
+        <p className="text-sm font-500 text-gray-500 text-center">
+          No calls made yet
+        </p>
+        <p className="text-xs text-gray-400 text-center mt-1">
+          Calls you make or receive will appear here.
+        </p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="w-full">
+      {calls.map((call) => {
+        const isMissed = call.status === 'missed';
+        const isCancelled = call.status === 'cancelled';
+        return (
+          <div key={call.id} className="w-full flex justify-between px-4 py-3 hover:bg-gray-50 border-b border-gray-50 last:border-b-0 cursor-pointer" onClick={() => onSelect(call.conversationId)}>
+            <div className="flex items-center gap-3 min-w-0">
+              <div className="relative shrink-0">
+                <div className="w-11 h-11 rounded-full overflow-hidden bg-gray-100 border border-gray-200">
+                  <AppImage src={call.convAvatar || `https://i.pravatar.cc/48?u=${encodeURIComponent(call.convName || call.conversationId)}`} alt={call.convName} width={44} height={44} className="w-full h-full object-cover" />
+                </div>
+              </div>
+              <div className="flex flex-col min-w-0">
+                <span className={`text-sm font-semibold truncate ${isMissed ? 'text-red-500' : 'text-gray-800'}`}>
+                  {call.convName}
+                </span>
+                <div className="flex items-center gap-1.5 text-xs text-gray-500">
+                  <PhoneCall size={12} className={isMissed ? 'text-red-400' : 'text-emerald-500'} />
+                  <span>{isMissed ? 'Missed' : isCancelled ? 'Cancelled' : 'Completed'}</span>
+                  <span>•</span>
+                  <span>{call.duration || '0s'}</span>
+                </div>
+              </div>
+            </div>
+            
+            <div className="flex flex-col items-end gap-1 shrink-0">
+              <span className="text-[11px] text-gray-400 font-medium">
+                {new Date(call.createdAt).toLocaleDateString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
+              </span>
+            </div>
+          </div>
+        );
+      })}
+    </div>
   );
 }

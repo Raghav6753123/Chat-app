@@ -22,6 +22,18 @@ export default function CallOverlay({
   const durationIntervalRef = useRef(null);
   const pendingCandidatesRef = useRef([]);
 
+  const cleanupCall = useCallback(() => {
+    if (localStreamRef.current) {
+      localStreamRef.current.getTracks().forEach(t => t.stop());
+      localStreamRef.current = null;
+    }
+    if (peerConnectionRef.current) {
+      peerConnectionRef.current.close();
+      peerConnectionRef.current = null;
+    }
+    clearInterval(durationIntervalRef.current);
+  }, []);
+
   const sendSignal = async (payload) => {
     const targetConversationId = activeCall?.conversationId || incomingCall?.conversationId;
     await fetch('/api/calls/signal', {
@@ -88,10 +100,15 @@ export default function CallOverlay({
     } catch (err) {
       console.error('WebRTC Setup Error:', err);
       // handle error...
-      cleanupCall();
+      if (localStreamRef.current) {
+        localStreamRef.current.getTracks().forEach(t => t.stop());
+      }
+      if (peerConnectionRef.current) {
+        peerConnectionRef.current.close();
+      }
       onEndCall?.('failed');
     }
-  }, [activeCall, incomingCall]);
+  }, [activeCall, incomingCall, sendSignal, onEndCall, cleanupCall]);
 
   useEffect(() => {
     if (activeCall?.type === 'outgoing') {
@@ -151,18 +168,6 @@ export default function CallOverlay({
       channel.unbind('call-signal', handleSignal);
     };
   }, [activeCall, incomingCall, currentUser?.id, callDuration]);
-
-  const cleanupCall = () => {
-    if (localStreamRef.current) {
-      localStreamRef.current.getTracks().forEach(t => t.stop());
-      localStreamRef.current = null;
-    }
-    if (peerConnectionRef.current) {
-      peerConnectionRef.current.close();
-      peerConnectionRef.current = null;
-    }
-    clearInterval(durationIntervalRef.current);
-  };
 
   const handleEndCall = () => {
     sendSignal({ signalType: 'end' });
