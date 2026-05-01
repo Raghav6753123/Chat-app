@@ -38,9 +38,13 @@ const messageSchema = new Schema(
       ref: 'Message',
       default: null,
     },
+    isEdited: { type: Boolean, default: false },
+    editedAt: { type: Date, default: null },
+    reactions: { type: Schema.Types.Mixed, default: {} },
   },
   {
     timestamps: { createdAt: 'createdAt', updatedAt: 'updatedAt' },
+    minimize: false, // Ensures empty reaction objects are saved
   }
 );
 

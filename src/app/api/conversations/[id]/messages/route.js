@@ -9,8 +9,8 @@ import Message from '@/models/Message';
 import { getPusherServer } from '@/lib/pusher-server';
 import User from '@/models/User';
 
-function serializeMessage(message, sender) {
-  return {
+function serializeMessage(message, sender, replyToMessage, replyToSender) {
+  const serialized = {
     id: message._id.toString(),
     senderId: message.senderId.toString(),
     senderName: sender?.name || 'Unknown',
@@ -24,7 +24,21 @@ function serializeMessage(message, sender) {
     duration: message.duration || undefined,
     replyTo: message.replyToId?.toString() || undefined,
     createdAt: message.createdAt,
+    isEdited: Boolean(message.isEdited),
+    editedAt: message.editedAt || undefined,
+    reactions: message.reactions || {},
   };
+
+  if (replyToMessage) {
+    serialized.replyToMessage = {
+      id: replyToMessage._id.toString(),
+      text: replyToMessage.text || (replyToMessage.type === 'image' ? 'Photo' : replyToMessage.type === 'file' ? replyToMessage.fileName || 'File' : ''),
+      senderName: replyToSender?.name || 'Unknown',
+      type: replyToMessage.type,
+    };
+  }
+
+  return serialized;
 }
 
 async function canAccessConversation(conversationId, userId) {
@@ -67,10 +81,35 @@ export async function GET(request, context) {
   const users = await User.find({ _id: { $in: senderIds } }).lean();
   const usersById = new Map(users.map((user) => [user._id.toString(), user]));
 
+  // Gather reply-to message data
+  const replyToIds = messages
+    .filter((m) => m.replyToId)
+    .map((m) => m.replyToId);
+  const replyToMessages = replyToIds.length
+    ? await Message.find({ _id: { $in: replyToIds } }).lean()
+    : [];
+  const replyToById = new Map(replyToMessages.map((m) => [m._id.toString(), m]));
+
+  // Gather reply-to senders
+  const replyToSenderIds = [...new Set(replyToMessages.map((m) => m.senderId.toString()))]
+    .filter((id) => !usersById.has(id))
+    .map((id) => new mongoose.Types.ObjectId(id));
+  if (replyToSenderIds.length) {
+    const extraUsers = await User.find({ _id: { $in: replyToSenderIds } }).lean();
+    extraUsers.forEach((u) => usersById.set(u._id.toString(), u));
+  }
+
   return NextResponse.json({
-    messages: messages.map((message) =>
-      serializeMessage(message, usersById.get(message.senderId.toString()))
-    ),
+    messages: messages.map((message) => {
+      const replyTo = message.replyToId ? replyToById.get(message.replyToId.toString()) : null;
+      const replyToSender = replyTo ? usersById.get(replyTo.senderId.toString()) : null;
+      return serializeMessage(
+        message,
+        usersById.get(message.senderId.toString()),
+        replyTo,
+        replyToSender
+      );
+    }),
   });
 }
 

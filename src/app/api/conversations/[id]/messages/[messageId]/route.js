@@ -6,6 +6,7 @@ import { toClockTime } from '@/lib/formatters';
 import Conversation from '@/models/Conversation';
 import ConversationMember from '@/models/ConversationMember';
 import Message from '@/models/Message';
+import User from '@/models/User';
 import { getPusherServer } from '@/lib/pusher-server';
 
 export const runtime = 'nodejs';
@@ -14,6 +15,84 @@ export const dynamic = 'force-dynamic';
 async function canAccessConversation(conversationId, userId) {
   const membership = await ConversationMember.findOne({ conversationId, userId }).lean();
   return Boolean(membership);
+}
+
+export async function PUT(request, context) {
+  const authUser = await getAuthUserFromRequest(request);
+  if (!authUser) {
+    return unauthorizedResponse();
+  }
+
+  await connectDB();
+
+  const { id, messageId } = await context.params;
+  if (!mongoose.Types.ObjectId.isValid(id) || !mongoose.Types.ObjectId.isValid(messageId)) {
+    return NextResponse.json({ error: 'Invalid id' }, { status: 400 });
+  }
+
+  const conversationId = new mongoose.Types.ObjectId(id);
+  const normalizedMessageId = new mongoose.Types.ObjectId(messageId);
+
+  const hasAccess = await canAccessConversation(conversationId, authUser._id);
+  if (!hasAccess) {
+    return NextResponse.json({ error: 'Conversation not found' }, { status: 404 });
+  }
+
+  const message = await Message.findOne({ _id: normalizedMessageId, conversationId });
+  if (!message) {
+    return NextResponse.json({ error: 'Message not found' }, { status: 404 });
+  }
+
+  if (message.senderId.toString() !== authUser._id.toString()) {
+    return NextResponse.json({ error: 'Only the sender can edit a message' }, { status: 403 });
+  }
+
+  if (message.type !== 'text') {
+    return NextResponse.json({ error: 'Only text messages can be edited' }, { status: 400 });
+  }
+
+  const body = await request.json().catch(() => ({}));
+  const newText = (body.text || '').trim();
+  if (!newText) {
+    return NextResponse.json({ error: 'Message text cannot be empty' }, { status: 400 });
+  }
+
+  message.text = newText;
+  message.isEdited = true;
+  message.editedAt = new Date();
+  await message.save();
+
+  const sender = await User.findById(authUser._id).lean();
+
+  const pusherServer = getPusherServer();
+  if (pusherServer) {
+    try {
+      await pusherServer.trigger(
+        `private-conversation-${conversationId.toString()}`,
+        'message-edited',
+        {
+          conversationId: conversationId.toString(),
+          messageId: normalizedMessageId.toString(),
+          text: newText,
+          isEdited: true,
+          editedAt: message.editedAt,
+        }
+      );
+    } catch {
+      // Keep edit successful even if realtime publish fails.
+    }
+  }
+
+  return NextResponse.json({
+    ok: true,
+    message: {
+      id: normalizedMessageId.toString(),
+      text: newText,
+      isEdited: true,
+      editedAt: message.editedAt,
+      senderName: sender?.name || 'Unknown',
+    },
+  });
 }
 
 export async function DELETE(request, context) {

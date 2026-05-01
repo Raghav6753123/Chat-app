@@ -2,7 +2,6 @@ import LandingNav from './components/nav';
 import HeroSection from './components/Hero';
 import FeaturesSection from './components/Features';
 import TestimonialsSection from './components/testimonial';
-import PricingSection from './components/Pricing';
 import LandingFooter from './components/footer';
 
 export default function LandingPage() {
@@ -12,7 +11,6 @@ export default function LandingPage() {
       <HeroSection />
       <FeaturesSection />
       <TestimonialsSection />
-      <PricingSection />
       <LandingFooter />
     </main>
   );

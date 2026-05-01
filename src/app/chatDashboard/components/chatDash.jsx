@@ -265,6 +265,33 @@ export default function ChatDashboard() {
       channel.bind('typing-status', onTypingStatus);
       channel.bind('group-updated', onGroupUpdated);
 
+      const onMessageEdited = (payload) => {
+        const cId = payload?.conversationId;
+        const mId = payload?.messageId;
+        if (!cId || !mId) return;
+        setMessagesByConversation((prev) => ({
+          ...prev,
+          [cId]: (prev[cId] || []).map((m) =>
+            m.id === mId ? { ...m, text: payload.text, isEdited: true, editedAt: payload.editedAt } : m
+          ),
+        }));
+      };
+
+      const onMessageReaction = (payload) => {
+        const cId = payload?.conversationId;
+        const mId = payload?.messageId;
+        if (!cId || !mId) return;
+        setMessagesByConversation((prev) => ({
+          ...prev,
+          [cId]: (prev[cId] || []).map((m) =>
+            m.id === mId ? { ...m, reactions: payload.reactions } : m
+          ),
+        }));
+      };
+
+      channel.bind('message-edited', onMessageEdited);
+      channel.bind('message-reaction', onMessageReaction);
+
       return {
         channelName,
         channel,
@@ -272,6 +299,8 @@ export default function ChatDashboard() {
         onDeletedMessage,
         onTypingStatus,
         onGroupUpdated,
+        onMessageEdited,
+        onMessageReaction,
       };
     });
 
@@ -311,11 +340,15 @@ export default function ChatDashboard() {
         onDeletedMessage,
         onTypingStatus,
         onGroupUpdated,
+        onMessageEdited,
+        onMessageReaction,
       }) => {
         channel.unbind('new-message', onIncomingMessage);
         channel.unbind('deleted-message', onDeletedMessage);
         channel.unbind('typing-status', onTypingStatus);
         channel.unbind('group-updated', onGroupUpdated);
+        channel.unbind('message-edited', onMessageEdited);
+        channel.unbind('message-reaction', onMessageReaction);
         pusherClient.unsubscribe(channelName);
       });
 
@@ -433,6 +466,24 @@ export default function ChatDashboard() {
         )
       );
     }
+  };
+
+  const handleMessageEdited = (conversationId, messageId, newText) => {
+    setMessagesByConversation((prev) => ({
+      ...prev,
+      [conversationId]: (prev[conversationId] || []).map((m) =>
+        m.id === messageId ? { ...m, text: newText, isEdited: true, editedAt: new Date().toISOString() } : m
+      ),
+    }));
+  };
+
+  const handleMessageReaction = (conversationId, messageId, reactions) => {
+    setMessagesByConversation((prev) => ({
+      ...prev,
+      [conversationId]: (prev[conversationId] || []).map((m) =>
+        m.id === messageId ? { ...m, reactions } : m
+      ),
+    }));
   };
 
   const handleTypingStatusChange = async (conversationId, isTyping) => {
@@ -569,8 +620,8 @@ export default function ChatDashboard() {
     <div className="h-screen flex bg-slate-50 overflow-hidden font-sans antialiased selection:bg-sky-200 selection:text-sky-900 transition-colors duration-300">
       <Toaster position="bottom-right" richColors toastOptions={{ className: 'rounded-xl shadow-lg border-0 bg-white/90 backdrop-blur-sm' }} />
 
-      {/* Left â€” Conversation list */}
-      <div className="w-80 xl:w-96 shrink-0 bg-white shadow-[1px_0_10px_-5px_rgba(0,0,0,0.1)] border-r border-slate-100 flex flex-col h-full z-10 transition-transform duration-300">
+      {/* Left — Conversation list */}
+      <div className={`w-full md:w-80 xl:w-96 shrink-0 bg-white shadow-[1px_0_10px_-5px_rgba(0,0,0,0.1)] border-r border-slate-100 flex flex-col h-full z-10 transition-transform duration-300 ${activeConversationId ? 'hidden md:flex' : 'flex'}`}>
         <ConversationList
           conversations={filteredConversations}
           activeId={activeConversationId}
@@ -585,7 +636,7 @@ export default function ChatDashboard() {
       </div>
 
       {/* Center — Chat window */}
-      <div className="flex-1 flex flex-col h-full min-w-0 bg-slate-50 relative z-0 shadow-[inset_0_0_10px_2px_rgba(0,0,0,0.01)] transition-all duration-300">
+      <div className={`flex-1 flex flex-col h-full min-w-0 bg-slate-50 relative z-0 shadow-[inset_0_0_10px_2px_rgba(0,0,0,0.01)] transition-all duration-300 ${activeConversationId ? 'flex' : 'hidden md:flex'}`}>
         {isLoading ? (
           <div className="flex h-full items-center justify-center px-6">
             <div className="text-center">
@@ -602,13 +653,16 @@ export default function ChatDashboard() {
             onTypingStatusChange={handleTypingStatusChange}
             onMessageSent={handleMessageSent}
             onMessageDeleted={handleMessageDeleted}
+            onMessageEdited={handleMessageEdited}
+            onMessageReaction={handleMessageReaction}
             onConversationUnavailable={handleConversationUnavailable}
+            onBack={() => { setActiveConversationId(null); setShowInfoPanel(false); }}
             showInfo={showInfoPanel}
           />
         ) : (
           <div className="flex h-full items-center justify-center px-6">
             <div className="text-center">
-              <p className="text-lg font-600 text-slate-700">Select a chat to start messaging</p>
+              <p className="text-lg font-semibold text-slate-700">Select a chat to start messaging</p>
               <p className="mt-2 text-sm text-slate-500">Pick any conversation from the left panel.</p>
             </div>
           </div>

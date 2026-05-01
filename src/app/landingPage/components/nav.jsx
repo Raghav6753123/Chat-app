@@ -4,6 +4,11 @@ import Link from 'next/link';
 import AppLogo from '@/components/ui/AppLogo';
 import { Menu, X } from 'lucide-react';
 
+const NAV_LINKS = [
+  { label: 'Features', href: '#features' },
+  { label: 'Testimonials', href: '#testimonials' },
+];
+
 export default function LandingNav() {
   const [scrolled, setScrolled] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
@@ -21,47 +26,38 @@ export default function LandingNav() {
       }`}
     >
       <div className="max-w-screen-xl mx-auto px-6 lg:px-10 h-16 flex items-center justify-between">
-        {/* Logo */}
         <div className="flex items-center gap-2">
           <AppLogo size={36} />
-          <span className="font-display text-xl font-700 tracking-tight text-gray-900">ChatApp</span>
+          <span className="font-display text-xl font-bold tracking-tight text-gray-900">ChatApp</span>
         </div>
 
-        {/* Desktop Nav */}
         <nav className="hidden md:flex items-center gap-8">
-          {[
-            { label: 'Features', href: '#features' },
-            { label: 'Pricing', href: '#pricing' },
-            { label: 'Security', href: '#security' },
-            { label: 'Download', href: '#download' },
-          ]?.map((item) => (
+          {NAV_LINKS.map((item) => (
             <a
-              key={`nav-${item?.label}`}
-              href={item?.href}
-              className="text-sm font-500 text-gray-600 hover:text-sky-600 transition-colors duration-150"
+              key={`nav-${item.label}`}
+              href={item.href}
+              className="text-sm font-medium text-gray-600 hover:text-sky-600 transition-colors duration-150"
             >
-              {item?.label}
+              {item.label}
             </a>
           ))}
         </nav>
 
-        {/* CTA Buttons */}
         <div className="hidden md:flex items-center gap-3">
           <Link
             href="/signup-login-screen"
-            className="text-sm font-600 text-gray-700 hover:text-sky-600 transition-colors duration-150 px-4 py-2 rounded-lg hover:bg-sky-50"
+            className="text-sm font-semibold text-gray-700 hover:text-sky-600 transition-colors duration-150 px-4 py-2 rounded-lg hover:bg-sky-50"
           >
             Sign in
           </Link>
           <Link
             href="/signup-login-screen"
-            className="text-sm font-600 text-white bg-sky-500 hover:bg-sky-600 active:scale-95 transition-all duration-150 px-5 py-2.5 rounded-xl shadow-sm shadow-sky-200"
+            className="text-sm font-semibold text-white bg-sky-500 hover:bg-sky-600 active:scale-95 transition-all duration-150 px-5 py-2.5 rounded-xl shadow-sm shadow-sky-200"
           >
             Get started free
           </Link>
         </div>
 
-        {/* Mobile Hamburger */}
         <button
           className="md:hidden p-2 rounded-lg text-gray-600 hover:bg-gray-100 transition-colors"
           onClick={() => setMobileOpen(!mobileOpen)}
@@ -70,22 +66,22 @@ export default function LandingNav() {
           {mobileOpen ? <X size={20} /> : <Menu size={20} />}
         </button>
       </div>
-      {/* Mobile Menu */}
+
       {mobileOpen && (
         <div className="md:hidden bg-white border-t border-gray-100 px-6 py-4 flex flex-col gap-4 animate-fade-in">
-          {['Features', 'Pricing', 'Security', 'Download']?.map((item) => (
+          {NAV_LINKS.map((item) => (
             <a
-              key={`mobile-nav-${item}`}
-              href={`#${item?.toLowerCase()}`}
-              className="text-sm font-500 text-gray-700 py-2"
+              key={`mobile-nav-${item.label}`}
+              href={item.href}
+              className="text-sm font-medium text-gray-700 py-2"
               onClick={() => setMobileOpen(false)}
             >
-              {item}
+              {item.label}
             </a>
           ))}
           <Link
             href="/signup-login-screen"
-            className="text-sm font-600 text-center text-white bg-sky-500 py-3 rounded-xl"
+            className="text-sm font-semibold text-center text-white bg-sky-500 py-3 rounded-xl"
             onClick={() => setMobileOpen(false)}
           >
             Get started free

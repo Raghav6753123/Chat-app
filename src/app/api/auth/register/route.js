@@ -69,7 +69,7 @@ export async function POST(request) {
     return withAuthCookie(response, token);
   } catch (error) {
     return NextResponse.json(
-      { error: 'Failed to register user', details: error.message },
+      { error: 'Failed to register user' },
       { status: 500 }
     );
   }

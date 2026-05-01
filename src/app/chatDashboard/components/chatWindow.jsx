@@ -1,11 +1,10 @@
 "use client";
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import AppImage from '@/components/ui/AppImage';
+import ImageViewer from '@/components/ui/ImageViewer';
+import ConfirmDialog from '@/components/ui/ConfirmDialog';
 import {
-  Phone,
-  Video,
   Info,
-  MoreVertical,
   Paperclip,
   Smile,
   Mic,
@@ -20,10 +19,14 @@ import {
   Trash2,
   ChevronDown,
   X,
+  Pencil,
+  Reply,
+  ArrowLeft,
 } from 'lucide-react';
 import { toast } from 'sonner';
 
-const EMOJI_LIST = [':)', '<3', ':D', ';)', ':P', 'XD', ':(', ':|'];
+const EMOJI_LIST = ['👍', '❤️', '😂', '😮', '😢', '🙏'];
+const TEXT_EMOJI_LIST = ['😊', '😂', '❤️', '👍', '🎉', '🔥', '😢', '🙏'];
 const MAX_UPLOAD_BYTES = 10 * 1024 * 1024;
 const ALLOWED_IMAGE_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp', 'image/gif']);
 const ALLOWED_FILE_TYPES = new Set([
@@ -43,12 +46,18 @@ export default function ChatWindow({
   onTypingStatusChange,
   onMessageSent,
   onMessageDeleted,
+  onMessageEdited,
+  onMessageReaction,
   onConversationUnavailable,
+  onBack,
   showInfo,
 }) {
   const [inputText, setInputText] = useState('');
   const [showEmoji, setShowEmoji] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
+  const [editingMessage, setEditingMessage] = useState(null);
+  const [viewerImage, setViewerImage] = useState(null);
+  const [confirmDelete, setConfirmDelete] = useState(null);
   const messagesEndRef = useRef(null);
   const inputRef = useRef(null);
   const imageInputRef = useRef(null);
@@ -98,6 +107,32 @@ export default function ChatWindow({
     const text = inputText.trim();
     if (!text) return;
 
+    // Handle edit mode
+    if (editingMessage) {
+      const msgId = editingMessage.id;
+      setInputText('');
+      setEditingMessage(null);
+      setShowEmoji(false);
+      emitTyping(false);
+      try {
+        const response = await fetch(`/api/conversations/${conversation.id}/messages/${msgId}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ text }),
+        });
+        const payload = await response.json();
+        if (!response.ok) {
+          toast.error(payload.error || 'Failed to edit message');
+          return;
+        }
+        onMessageEdited?.(conversation.id, msgId, text);
+        toast.success('Message edited');
+      } catch {
+        toast.error('Unable to edit message right now.');
+      }
+      return;
+    }
+
     setInputText('');
     setShowEmoji(false);
     emitTyping(false);
@@ -123,6 +158,35 @@ export default function ChatWindow({
       onMessageSent?.(conversation.id, payload.message);
     } catch {
       toast.error('Unable to send message right now.');
+    }
+  };
+
+  const startEditMessage = (message) => {
+    setEditingMessage(message);
+    setInputText(message.text);
+    inputRef.current?.focus();
+  };
+
+  const cancelEdit = () => {
+    setEditingMessage(null);
+    setInputText('');
+  };
+
+  const toggleReaction = async (messageId, emoji) => {
+    try {
+      const response = await fetch(`/api/conversations/${conversation.id}/messages/${messageId}/react`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ emoji }),
+      });
+      const payload = await response.json();
+      if (!response.ok) {
+        toast.error(payload.error || 'Failed to react');
+        return;
+      }
+      onMessageReaction?.(conversation.id, messageId, payload.reactions);
+    } catch {
+      toast.error('Unable to react right now.');
     }
   };
 
@@ -318,18 +382,64 @@ export default function ChatWindow({
 
   const groupedMessages = [];
   messages.forEach((message) => {
-    const date = 'Today';
+    const msgDate = message.createdAt ? new Date(message.createdAt) : new Date();
+    const today = new Date();
+    const yesterday = new Date(today);
+    yesterday.setDate(yesterday.getDate() - 1);
+    let dateLabel;
+    if (msgDate.toDateString() === today.toDateString()) {
+      dateLabel = 'Today';
+    } else if (msgDate.toDateString() === yesterday.toDateString()) {
+      dateLabel = 'Yesterday';
+    } else {
+      dateLabel = msgDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+    }
     const lastGroup = groupedMessages[groupedMessages.length - 1];
-    if (lastGroup && lastGroup.date === date) {
+    if (lastGroup && lastGroup.date === dateLabel) {
       lastGroup.messages.push(message);
     } else {
-      groupedMessages.push({ date, messages: [message] });
+      groupedMessages.push({ date: dateLabel, messages: [message] });
     }
   });
 
   return (
     <div className="flex flex-col h-full bg-slate-50">
+      {/* Image Viewer */}
+      {viewerImage && (
+        <ImageViewer
+          images={[viewerImage]}
+          initialIndex={0}
+          onClose={() => setViewerImage(null)}
+        />
+      )}
+
+      {/* Delete Confirmation */}
+      <ConfirmDialog
+        open={!!confirmDelete}
+        title="Delete message?"
+        description={confirmDelete?.scope === 'everyone' ? 'This will delete the message for all participants.' : 'This will remove the message from your view only.'}
+        confirmLabel="Delete"
+        variant="danger"
+        onConfirm={() => {
+          if (confirmDelete) {
+            deleteMessage(confirmDelete.id, confirmDelete.scope);
+          }
+          setConfirmDelete(null);
+        }}
+        onCancel={() => setConfirmDelete(null)}
+      />
+
       <div className="bg-white border-b border-gray-100 px-4 py-3 flex items-center gap-3 flex-shrink-0">
+        {/* Mobile back button */}
+        {onBack && (
+          <button
+            onClick={onBack}
+            className="w-9 h-9 flex items-center justify-center rounded-xl text-gray-500 hover:bg-gray-100 transition-all duration-150 md:hidden flex-shrink-0"
+            title="Back"
+          >
+            <ArrowLeft size={18} />
+          </button>
+        )}
         <div className="relative flex-shrink-0">
           <div className="w-10 h-10 rounded-full overflow-hidden bg-gray-100">
             <AppImage
@@ -347,7 +457,7 @@ export default function ChatWindow({
 
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2">
-            <p className="text-sm font-700 text-gray-900 truncate">{conversation.name}</p>
+            <p className="text-sm font-bold text-gray-900 truncate">{conversation.name}</p>
             {conversation.isGroup && (
               <span className="text-xs text-gray-400 bg-gray-100 px-2 py-0.5 rounded-full">
                 {conversation.members} members
@@ -363,20 +473,6 @@ export default function ChatWindow({
 
         <div className="flex items-center gap-1">
           <button
-            onClick={() => toast.info('Voice call starting...')}
-            className="w-9 h-9 flex items-center justify-center rounded-xl text-gray-500 hover:bg-gray-100 hover:text-sky-600 transition-all duration-150"
-            title="Voice call"
-          >
-            <Phone size={18} />
-          </button>
-          <button
-            onClick={() => toast.info('Video call starting...')}
-            className="w-9 h-9 flex items-center justify-center rounded-xl text-gray-500 hover:bg-gray-100 hover:text-sky-600 transition-all duration-150"
-            title="Video call"
-          >
-            <Video size={18} />
-          </button>
-          <button
             onClick={onToggleInfo}
             className={`w-9 h-9 flex items-center justify-center rounded-xl transition-all duration-150 ${
               showInfo ? 'bg-sky-50 text-sky-600' : 'text-gray-500 hover:bg-gray-100 hover:text-sky-600'
@@ -384,12 +480,6 @@ export default function ChatWindow({
             title="Contact info"
           >
             <Info size={18} />
-          </button>
-          <button
-            className="w-9 h-9 flex items-center justify-center rounded-xl text-gray-500 hover:bg-gray-100 hover:text-gray-700 transition-all duration-150"
-            title="More options"
-          >
-            <MoreVertical size={18} />
           </button>
         </div>
       </div>
@@ -413,9 +503,13 @@ export default function ChatWindow({
                   message={message}
                   isMine={isMine}
                   isConsecutive={isConsecutive}
+                  currentUserId={currentUserId}
                   onCopyMessage={() => copyMessageText(message.text)}
-                  onDeleteForMe={() => deleteMessage(message.id, 'me')}
-                  onDeleteForEveryone={() => deleteMessage(message.id, 'everyone')}
+                  onDeleteForMe={() => setConfirmDelete({ id: message.id, scope: 'me' })}
+                  onDeleteForEveryone={() => setConfirmDelete({ id: message.id, scope: 'everyone' })}
+                  onEditMessage={() => startEditMessage(message)}
+                  onReact={(emoji) => toggleReaction(message.id, emoji)}
+                  onImageClick={(url, name) => setViewerImage({ url, name })}
                   senderName={
                     !isMine && conversation.isGroup
                       ? message.senderName || message.senderId
@@ -431,22 +525,36 @@ export default function ChatWindow({
         <div ref={messagesEndRef} />
       </div>
 
+      {/* Edit banner */}
+      {editingMessage && (
+        <div className="bg-sky-50 border-t border-sky-100 px-4 py-2 flex items-center gap-3 flex-shrink-0">
+          <Pencil size={14} className="text-sky-600" />
+          <div className="flex-1 min-w-0">
+            <p className="text-xs font-semibold text-sky-700">Editing message</p>
+            <p className="text-xs text-sky-600 truncate">{editingMessage.text}</p>
+          </div>
+          <button onClick={cancelEdit} className="text-sky-400 hover:text-sky-600">
+            <X size={16} />
+          </button>
+        </div>
+      )}
+
       {showEmoji && (
         <div className="bg-white border-t border-gray-100 px-4 py-3 flex-shrink-0">
           <div className="flex items-center justify-between mb-2">
-            <p className="text-xs font-600 text-gray-500">Quick reactions</p>
+            <p className="text-xs font-semibold text-gray-500">Insert emoji</p>
             <button onClick={() => setShowEmoji(false)} className="text-gray-400 hover:text-gray-600">
               <X size={14} />
             </button>
           </div>
           <div className="flex flex-wrap gap-2">
-            {EMOJI_LIST.map((emoji) => (
+            {TEXT_EMOJI_LIST.map((emoji) => (
               <button
                 key={`emoji-${emoji}`}
                 onClick={() => appendEmoji(emoji)}
-                className="text-sm px-2 py-1 bg-gray-100 rounded-md hover:bg-gray-200 transition-colors"
+                className="text-xl px-2 py-1 bg-gray-100 rounded-md hover:bg-gray-200 transition-colors"
               >
-                {emoji}
+              {emoji}
               </button>
             ))}
           </div>
@@ -549,27 +657,33 @@ function MessageBubble({
   message,
   isMine,
   isConsecutive,
+  currentUserId,
   onCopyMessage,
   onDeleteForMe,
   onDeleteForEveryone,
+  onEditMessage,
+  onReact,
+  onImageClick,
   senderName,
   senderAvatar,
   senderAvatarAlt,
 }) {
   const [showActions, setShowActions] = useState(false);
+  const [showReactPicker, setShowReactPicker] = useState(false);
   const attachmentUrl = normalizeAttachmentUrl(message.fileUrl || message.text);
   const attachmentName = message.fileName || (message.type === 'image' ? 'image' : 'attachment');
+  const reactions = message.reactions || {};
+  const hasReactions = Object.keys(reactions).length > 0;
 
   return (
     <div className={`flex items-end gap-2 ${isMine ? 'flex-row-reverse' : 'flex-row'} ${isConsecutive ? 'mt-0.5' : 'mt-3'}`}>
-      {/* Avatar (only for received, non-consecutive) */}
       {!isMine && (
         <div className={`w-7 h-7 rounded-full overflow-hidden flex-shrink-0 ${isConsecutive ? 'invisible' : ''}`}>
           {senderAvatar ? (
             <AppImage src={senderAvatar} alt={senderAvatarAlt} width={28} height={28} className="w-full h-full object-cover" />
           ) : (
             <div className="w-full h-full bg-gray-200 flex items-center justify-center">
-              <span className="text-xs font-600 text-gray-500">
+              <span className="text-xs font-semibold text-gray-500">
                 {senderName?.charAt(0) ?? '?'}
               </span>
             </div>
@@ -577,27 +691,30 @@ function MessageBubble({
         </div>
       )}
 
-      {/* Bubble */}
       <div className={`max-w-[65%] flex flex-col gap-0.5 ${isMine ? 'items-end' : 'items-start'}`}>
-        {/* Sender name in groups */}
         {senderName && !isConsecutive && (
-          <p className="text-xs font-600 text-sky-600 px-1">{senderName}</p>
+          <p className="text-xs font-semibold text-sky-600 px-1">{senderName}</p>
+        )}
+
+        {/* Reply-to preview */}
+        {message.replyToMessage && (
+          <div className={`text-xs px-3 py-1.5 rounded-lg border-l-2 mb-0.5 ${isMine ? 'bg-sky-600/30 border-white/40 text-sky-100' : 'bg-gray-100 border-sky-400 text-gray-600'}`}>
+            <span className="font-semibold">{message.replyToMessage.senderName}</span>
+            <p className="truncate max-w-[200px]">{message.replyToMessage.text}</p>
+          </div>
         )}
 
         {message.type === 'image' ? (
           <div className={`p-1.5 rounded-2xl shadow-sm border ${
-            isMine
-              ? 'message-bubble-sent border-sky-700/80'
-              : 'message-bubble-received border-slate-200'
+            isMine ? 'message-bubble-sent border-sky-700/80' : 'message-bubble-received border-slate-200'
           }`}>
             {attachmentUrl ? (
               <>
-                <a
-                  href={attachmentUrl}
-                  target="_blank"
-                  rel="noreferrer"
-                  className={`block w-[220px] h-[220px] rounded-xl p-1 ${isMine ? 'bg-sky-950/20' : 'bg-slate-200/80'}`}
-                  title="Open image in new tab"
+                <button
+                  type="button"
+                  onClick={() => onImageClick?.(attachmentUrl, attachmentName)}
+                  className={`block w-[220px] h-[220px] rounded-xl p-1 cursor-pointer ${isMine ? 'bg-sky-950/20' : 'bg-slate-200/80'}`}
+                  title="View image"
                 >
                   <AppImage
                     src={attachmentUrl}
@@ -608,23 +725,12 @@ function MessageBubble({
                       isMine ? 'ring-1 ring-white/40' : 'ring-1 ring-slate-200'
                     }`}
                   />
-                </a>
+                </button>
                 <div className="mt-2 flex items-center gap-2">
                   <a
                     href={attachmentUrl}
-                    target="_blank"
-                    rel="noreferrer"
-                    className={`inline-flex items-center gap-1.5 text-xs font-600 px-2.5 py-1 rounded-md ${
-                      isMine ? 'bg-white/20 text-white hover:bg-white/30' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
-                    }`}
-                  >
-                    <ExternalLink size={12} />
-                    Open
-                  </a>
-                  <a
-                    href={attachmentUrl}
                     download={attachmentName}
-                    className={`inline-flex items-center gap-1.5 text-xs font-600 px-2.5 py-1 rounded-md ${
+                    className={`inline-flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1 rounded-md ${
                       isMine ? 'bg-white/20 text-white hover:bg-white/30' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
                     }`}
                   >
@@ -649,29 +755,18 @@ function MessageBubble({
               <FileText size={16} className={isMine ? 'text-white' : 'text-sky-600'} />
             </div>
             <div>
-              <p className={`text-xs font-600 ${isMine ? 'text-white' : 'text-gray-800'}`}>
+              <p className={`text-xs font-semibold ${isMine ? 'text-white' : 'text-gray-800'}`}>
                 {message.fileName}
               </p>
               <p className={`text-xs ${isMine ? 'text-sky-100' : 'text-gray-400'}`}>
                 {message.fileSize}
               </p>
-              {attachmentUrl ? (
+              {attachmentUrl && (
                 <div className="mt-2 flex items-center gap-2">
                   <a
                     href={attachmentUrl}
-                    target="_blank"
-                    rel="noreferrer"
-                    className={`inline-flex items-center gap-1.5 text-xs font-600 px-2.5 py-1 rounded-md ${
-                      isMine ? 'bg-white/20 text-white hover:bg-white/30' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
-                    }`}
-                  >
-                    <ExternalLink size={12} />
-                    Open
-                  </a>
-                  <a
-                    href={attachmentUrl}
                     download={attachmentName}
-                    className={`inline-flex items-center gap-1.5 text-xs font-600 px-2.5 py-1 rounded-md ${
+                    className={`inline-flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1 rounded-md ${
                       isMine ? 'bg-white/20 text-white hover:bg-white/30' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
                     }`}
                   >
@@ -679,10 +774,6 @@ function MessageBubble({
                     Download
                   </a>
                 </div>
-              ) : (
-                <p className={`mt-1 text-xs ${isMine ? 'text-sky-100' : 'text-gray-500'}`}>
-                  Attachment unavailable
-                </p>
               )}
             </div>
           </div>
@@ -696,17 +787,41 @@ function MessageBubble({
           </div>
         )}
 
-        {/* Timestamp + status */}
+        {/* Reactions display */}
+        {hasReactions && (
+          <div className="flex flex-wrap gap-1 px-1">
+            {Object.entries(reactions).map(([emoji, users]) => {
+              if (!users?.length) return null;
+              const iReacted = users.includes(currentUserId);
+              return (
+                <button
+                  key={`reaction-${emoji}`}
+                  onClick={() => onReact?.(emoji)}
+                  className={`inline-flex items-center gap-1 text-xs px-1.5 py-0.5 rounded-full border transition-colors ${
+                    iReacted ? 'bg-sky-50 border-sky-200 text-sky-700' : 'bg-gray-50 border-gray-200 text-gray-600 hover:bg-gray-100'
+                  }`}
+                >
+                  <span>{emoji}</span>
+                  <span className="font-semibold">{users.length}</span>
+                </button>
+              );
+            })}
+          </div>
+        )}
+
+        {/* Timestamp + status + edited */}
         <div className={`flex items-center gap-1 px-1 ${isMine ? 'flex-row-reverse' : 'flex-row'}`}>
           <span className={`text-xs ${isMine ? 'text-sky-700' : 'text-gray-400'}`}>{message.timestamp}</span>
+          {message.isEdited && <span className="text-xs text-gray-400 italic">edited</span>}
           {isMine && <MessageStatus status={message.status} />}
         </div>
       </div>
 
+      {/* Actions */}
       <div className="relative self-start">
         <button
           type="button"
-          onClick={() => setShowActions((prev) => !prev)}
+          onClick={() => { setShowActions((prev) => !prev); setShowReactPicker(false); }}
           className="w-6 h-6 rounded-full flex items-center justify-center text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-colors"
           title="Message actions"
         >
@@ -714,24 +829,53 @@ function MessageBubble({
         </button>
 
         {showActions && (
-          <div className={`absolute z-20 mt-1 w-44 rounded-xl border border-slate-200 bg-white shadow-lg p-1 ${isMine ? 'right-0' : 'left-0'}`}>
+          <div className={`absolute z-20 mt-1 w-48 rounded-xl border border-slate-200 bg-white shadow-lg p-1 ${isMine ? 'right-0' : 'left-0'}`}>
             <button
               type="button"
-              onClick={() => {
-                setShowActions(false);
-                onCopyMessage?.();
-              }}
+              onClick={() => { setShowActions(false); onCopyMessage?.(); }}
               className="w-full flex items-center gap-2 px-3 py-2 text-sm text-slate-700 hover:bg-slate-50 rounded-lg"
             >
               <Copy size={14} />
               Copy
             </button>
+            {/* React button */}
+            <div className="relative">
+              <button
+                type="button"
+                onClick={() => setShowReactPicker((prev) => !prev)}
+                className="w-full flex items-center gap-2 px-3 py-2 text-sm text-slate-700 hover:bg-slate-50 rounded-lg"
+              >
+                <Smile size={14} />
+                React
+              </button>
+              {showReactPicker && (
+                <div className="flex gap-1 px-3 py-1.5 bg-slate-50 rounded-lg mb-1">
+                  {EMOJI_LIST.map((emoji) => (
+                    <button
+                      key={`react-${emoji}`}
+                      onClick={() => { setShowActions(false); setShowReactPicker(false); onReact?.(emoji); }}
+                      className="text-lg hover:scale-125 transition-transform"
+                    >
+                      {emoji}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+            {/* Edit (own text messages only) */}
+            {isMine && message.type === 'text' && (
+              <button
+                type="button"
+                onClick={() => { setShowActions(false); onEditMessage?.(); }}
+                className="w-full flex items-center gap-2 px-3 py-2 text-sm text-slate-700 hover:bg-slate-50 rounded-lg"
+              >
+                <Pencil size={14} />
+                Edit
+              </button>
+            )}
             <button
               type="button"
-              onClick={() => {
-                setShowActions(false);
-                onDeleteForMe?.();
-              }}
+              onClick={() => { setShowActions(false); onDeleteForMe?.(); }}
               className="w-full flex items-center gap-2 px-3 py-2 text-sm text-slate-700 hover:bg-slate-50 rounded-lg"
             >
               <Trash2 size={14} />
@@ -740,10 +884,7 @@ function MessageBubble({
             {isMine && (
               <button
                 type="button"
-                onClick={() => {
-                  setShowActions(false);
-                  onDeleteForEveryone?.();
-                }}
+                onClick={() => { setShowActions(false); onDeleteForEveryone?.(); }}
                 className="w-full flex items-center gap-2 px-3 py-2 text-sm text-rose-600 hover:bg-rose-50 rounded-lg"
               >
                 <Trash2 size={14} />
