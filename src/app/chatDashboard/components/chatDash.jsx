@@ -713,6 +713,7 @@ export default function ChatDashboard() {
           searchQuery={searchQuery}
           onSearchChange={setSearchQuery}
           currentUser={currentUser}
+          onStartCall={handleStartCall}
         />
       </div>
 
