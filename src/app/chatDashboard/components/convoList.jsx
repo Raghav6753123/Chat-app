@@ -2,7 +2,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import AppImage from '@/components/ui/AppImage';
 import AppLogo from '@/components/ui/AppLogo';
-import { Search, Plus, MoreVertical, Users, BellOff, Pin, X, PhoneCall } from 'lucide-react';
+import { Search, Plus, MoreVertical, Users, BellOff, Pin, X, PhoneCall, Phone, Video } from 'lucide-react';
 import Link from 'next/link';
 import { toast } from 'sonner';
 
@@ -16,6 +16,7 @@ export default function ConversationList({
   searchQuery,
   onSearchChange,
   currentUser,
+  onStartCall,
 }) {
   const [activeFilter, setActiveFilter] = useState('all'); // all, unread, groups, calls
   const [showCreateModal, setShowCreateModal] = useState(false);
@@ -147,7 +148,7 @@ export default function ConversationList({
   return (
     <div className="flex flex-col h-full">
       {/* Header */}
-      <div className="px-4 pt-4 pb-3 border-b border-gray-50">
+      <div className="px-4 pt-4 pb-3 border-b border-slate-100/60">
         <div className="flex items-center justify-between mb-4">
           <div className="flex items-center gap-2">
             <AppLogo size={28} />
@@ -225,13 +226,13 @@ export default function ConversationList({
 
         {/* Search */}
         <div className="relative">
-          <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+          <Search size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
           <input
             type="text"
             placeholder="Search conversations..."
             value={searchQuery}
             onChange={(e) => onSearchChange(e.target.value)}
-            className="w-full bg-gray-100 border-0 rounded-xl pl-9 pr-4 py-2.5 text-sm text-gray-700 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-sky-500/30 focus:bg-white transition-all duration-150"
+            className="w-full bg-slate-50 border border-slate-200/60 rounded-full pl-9 pr-4 py-2 text-sm text-slate-700 placeholder-slate-400 focus:outline-none focus:ring-4 focus:ring-sky-500/10 focus:border-sky-400 transition-all duration-200"
           />
         </div>
 
@@ -246,9 +247,10 @@ export default function ConversationList({
             <button
               key={`filter-${f.key}`}
               onClick={() => setActiveFilter(f.key)}
-              className={`text-xs font-600 px-3 py-1.5 rounded-full transition-all duration-150 ${
+              className={`text-[13px] font-500 px-3.5 py-1.5 rounded-full transition-all duration-200 ${
                 activeFilter === f.key
-                  ? 'bg-sky-500 text-white' :'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                  ? 'bg-slate-800 text-white shadow-sm'
+                  : 'bg-slate-50 text-slate-600 hover:bg-slate-100 border border-slate-200/50'
               }`}
             >
               {f.label}
@@ -260,8 +262,8 @@ export default function ConversationList({
       {/* Pinned section */}
       {activeFilter === 'all' && filtered.some((c) => c.isPinned) && (
         <div className="px-4 pt-3 pb-1">
-          <p className="text-xs font-600 text-gray-400 uppercase tracking-widest flex items-center gap-1.5">
-            <Pin size={11} /> Pinned
+          <p className="text-[11px] font-600 text-slate-400 uppercase tracking-widest flex items-center gap-1.5">
+            <Pin size={12} /> Pinned
           </p>
         </div>
       )}
@@ -272,6 +274,7 @@ export default function ConversationList({
           <CallHistoryView
             conversations={conversations}
             onSelect={onSelect}
+            onStartCall={onStartCall}
           />
         ) : filtered.length === 0 ? (
           <div className="flex flex-col items-center justify-center h-48 gap-3 px-6">
@@ -295,29 +298,31 @@ export default function ConversationList({
       </div>
 
       {/* Bottom user profile */}
-      <div className="border-t border-gray-100 px-4 py-3 flex items-center gap-3">
-        <div className="relative shrink-0">
-          <div className="w-9 h-9 rounded-full bg-sky-100 flex items-center justify-center">
-            <span className="text-sm font-700 text-sky-600">
-              {(currentUser?.name || 'User')
-                .split(' ')
-                .map((part) => part.charAt(0).toUpperCase())
-                .slice(0, 2)
-                .join('')}
-            </span>
+      <div className="border-t border-slate-100/60 p-4 bg-white/50 backdrop-blur-sm">
+        <div className="flex items-center gap-3 bg-slate-50/80 border border-slate-200/60 rounded-2xl p-2.5 shadow-sm">
+          <div className="relative shrink-0">
+            <div className="w-9 h-9 rounded-full bg-gradient-to-tr from-sky-100 to-sky-50 flex items-center justify-center border border-sky-100">
+              <span className="text-sm font-600 text-sky-700">
+                {(currentUser?.name || 'User')
+                  .split(' ')
+                  .map((part) => part.charAt(0).toUpperCase())
+                  .slice(0, 2)
+                  .join('')}
+              </span>
+            </div>
+            <div className="absolute bottom-0 right-0 w-2.5 h-2.5 bg-emerald-400 border-2 border-white rounded-full shadow-sm" />
           </div>
-          <div className="absolute bottom-0 right-0 w-2.5 h-2.5 bg-emerald-400 border-2 border-white rounded-full" />
+          <div className="flex-1 min-w-0">
+            <p className="text-sm font-600 text-slate-800 truncate">{currentUser?.name || 'Guest User'}</p>
+            <p className="text-xs text-slate-500 truncate">{currentUser?.email || 'Not signed in'}</p>
+          </div>
+          <Link
+            href="/landingPage"
+            className="text-xs text-slate-400 hover:text-sky-600 transition-colors font-500 px-2"
+          >
+            Home
+          </Link>
         </div>
-        <div className="flex-1 min-w-0">
-          <p className="text-sm font-600 text-gray-900 truncate">{currentUser?.name || 'Guest User'}</p>
-          <p className="text-xs text-gray-400">{currentUser?.email || 'Not signed in'}</p>
-        </div>
-        <Link
-          href="/landingPage"
-          className="text-xs text-gray-400 hover:text-sky-600 transition-colors font-500"
-        >
-          Home
-        </Link>
       </div>
 
       {showCreateModal && (
@@ -739,8 +744,8 @@ function ConversationItem({
   return (
     <button
       onClick={() => onSelect(c.id)}
-      className={`w-full flex items-center gap-3 px-4 py-3 transition-all duration-150 text-left group relative border-b border-gray-50/50 last:border-b-0 ${
-        isActive ? 'bg-sky-50' : 'hover:bg-gray-50'
+      className={`w-full flex items-center gap-3 px-4 py-3 transition-all duration-200 text-left group relative border-b border-slate-100/40 last:border-b-0 ${
+        isActive ? 'bg-sky-50/50 before:absolute before:left-0 before:top-0 before:bottom-0 before:w-1 before:bg-sky-500 before:rounded-r-md' : 'hover:bg-slate-50'
       }`}
     >
       {/* Avatar */}
@@ -768,24 +773,24 @@ function ConversationItem({
 
       {/* Content */}
       <div className="flex-1 min-w-0">
-        <div className="flex items-center justify-between gap-1 mb-0.5">
+        <div className="flex items-center justify-between gap-1 mb-1">
           <div className="flex items-center gap-1.5 min-w-0">
-            <span className={`text-sm truncate ${c.unreadCount > 0 ? 'font-700 text-gray-900' : 'font-500 text-gray-800'}`}>
+            <span className={`text-sm truncate ${c.unreadCount > 0 ? 'font-600 text-slate-900' : 'font-500 text-slate-700'}`}>
               {c.name}
             </span>
-            {c.isMuted && <BellOff size={11} className="text-gray-400 shrink-0" />}
-            {c.isPinned && <Pin size={11} className="text-sky-400 shrink-0" />}
+            {c.isMuted && <BellOff size={12} className="text-slate-400 shrink-0" />}
+            {c.isPinned && <Pin size={12} className="text-sky-500 shrink-0" />}
           </div>
-          <span className={`text-xs shrink-0 ${c.unreadCount > 0 ? 'text-sky-600 font-600' : 'text-gray-400'}`}>
+          <span className={`text-[11px] shrink-0 font-500 ${c.unreadCount > 0 ? 'text-sky-600 font-600' : 'text-slate-400'}`}>
             {c.lastMessageTime}
           </span>
         </div>
         <div className="flex items-center justify-between gap-2">
-          <p className={`text-xs truncate ${c.unreadCount > 0 ? 'text-gray-700 font-500' : 'text-gray-400'}`}>
+          <p className={`text-[13px] truncate leading-tight ${c.unreadCount > 0 ? 'text-slate-800 font-500' : 'text-slate-500'}`}>
             {c.lastMessage}
           </p>
           {c.unreadCount > 0 && (
-            <span className="shrink-0 w-5 h-5 bg-sky-500 text-white text-xs font-700 rounded-full flex items-center justify-center tabular-nums">
+            <span className="shrink-0 w-5 h-5 bg-sky-500 text-white text-xs font-600 rounded-full flex items-center justify-center tabular-nums shadow-sm shadow-sky-200">
               {c.unreadCount > 9 ? '9+' : c.unreadCount}
             </span>
           )}
@@ -795,7 +800,7 @@ function ConversationItem({
   );
 }
 
-function CallHistoryView({ conversations, onSelect }) {
+function CallHistoryView({ conversations, onSelect, onStartCall }) {
   const [calls, setCalls] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
 
@@ -810,13 +815,18 @@ function CallHistoryView({ conversations, onSelect }) {
           if (res.ok) {
             const data = await res.json();
             if (data.calls) {
-              const mappedCalls = data.calls.map(c => ({ ...c, conversationId: conv.id, convName: conv.name, convAvatar: conv.avatar }));
+              const mappedCalls = data.calls.map(c => ({ 
+                ...c, 
+                conversationId: conv.id, 
+                convName: conv.name, 
+                convAvatar: conv.avatar 
+              }));
               fetchedCalls.push(...mappedCalls);
             }
           }
         }
         
-        fetchedCalls.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+        fetchedCalls.sort((a, b) => new Date(b.startedAt).getTime() - new Date(a.startedAt).getTime());
         setCalls(fetchedCalls);
       } catch (err) {
         console.error('Failed to load call history', err);
@@ -862,8 +872,11 @@ function CallHistoryView({ conversations, onSelect }) {
       {calls.map((call) => {
         const isMissed = call.status === 'missed';
         const isCancelled = call.status === 'cancelled';
+        const isIncoming = !call.isOutgoing;
+        const callIconClass = isMissed ? 'text-red-500' : (isIncoming ? 'text-blue-500' : 'text-emerald-500');
+
         return (
-          <div key={call.id} className="w-full flex justify-between px-4 py-3 hover:bg-gray-50 border-b border-gray-50 last:border-b-0 cursor-pointer" onClick={() => onSelect(call.conversationId)}>
+          <div key={call.id} className="w-full flex justify-between px-4 py-3 hover:bg-gray-50 border-b border-gray-50 last:border-b-0 cursor-pointer group" onClick={() => onSelect(call.conversationId)}>
             <div className="flex items-center gap-3 min-w-0">
               <div className="relative shrink-0">
                 <div className="w-11 h-11 rounded-full overflow-hidden bg-gray-100 border border-gray-200">
@@ -875,18 +888,44 @@ function CallHistoryView({ conversations, onSelect }) {
                   {call.convName}
                 </span>
                 <div className="flex items-center gap-1.5 text-xs text-gray-500">
-                  <PhoneCall size={12} className={isMissed ? 'text-red-400' : 'text-emerald-500'} />
-                  <span>{isMissed ? 'Missed' : isCancelled ? 'Cancelled' : 'Completed'}</span>
+                  {call.type === 'video' ? (
+                    <Video size={12} className={callIconClass} />
+                  ) : (
+                    <PhoneCall size={12} className={callIconClass} />
+                  )}
+                  <span>{call.isOutgoing ? 'Outgoing' : 'Incoming'} {isMissed ? 'Missed' : isCancelled ? 'Cancelled' : ''}</span>
                   <span>•</span>
-                  <span>{call.duration || '0s'}</span>
+                  <span>{call.durationLabel || '0:00'}</span>
                 </div>
               </div>
             </div>
             
             <div className="flex flex-col items-end gap-1 shrink-0">
               <span className="text-[11px] text-gray-400 font-medium">
-                {new Date(call.createdAt).toLocaleDateString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                {new Date(call.startedAt || Date.now()).toLocaleDateString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
               </span>
+              <div className="flex items-center gap-2 mt-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                <button 
+                  className="p-1.5 bg-gray-100 hover:bg-sky-100 hover:text-sky-600 rounded-full text-gray-500 transition-colors"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    if(onStartCall) onStartCall(call.conversationId, 'audio');
+                  }}
+                  title="Audio call"
+                >
+                  <Phone size={14} />
+                </button>
+                <button 
+                  className="p-1.5 bg-gray-100 hover:bg-sky-100 hover:text-sky-600 rounded-full text-gray-500 transition-colors"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    if(onStartCall) onStartCall(call.conversationId, 'video');
+                  }}
+                  title="Video call"
+                >
+                  <Video size={14} />
+                </button>
+              </div>
             </div>
           </div>
         );

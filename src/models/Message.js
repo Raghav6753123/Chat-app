@@ -24,7 +24,7 @@ const messageSchema = new Schema(
     callStatus: { type: String, enum: ['missed', 'completed', 'cancelled'], default: null },
     status: {
       type: String,
-      enum: ['sending', 'sent', 'delivered', 'read'],
+      enum: ['scheduled', 'sending', 'sent', 'delivered', 'read'],
       default: 'sent',
     },
     fileUrl: { type: String, default: '' },
@@ -43,6 +43,15 @@ const messageSchema = new Schema(
     isEdited: { type: Boolean, default: false },
     editedAt: { type: Date, default: null },
     reactions: { type: Schema.Types.Mixed, default: {} },
+    scheduledFor: { type: Date, default: null },
+    isForwarded: { type: Boolean, default: false },
+    forwardedFromConversationId: { type: Schema.Types.ObjectId, ref: 'Conversation', default: null },
+    forwardedFromMessageId: { type: Schema.Types.ObjectId, ref: 'Message', default: null },
+    readBy: [{
+      userId: { type: Schema.Types.ObjectId, ref: 'User' },
+      readAt: { type: Date, default: Date.now }
+    }],
+    waveform: { type: [Number], default: [] },
   },
   {
     timestamps: { createdAt: 'createdAt', updatedAt: 'updatedAt' },
@@ -50,6 +59,7 @@ const messageSchema = new Schema(
   }
 );
 
-const Message = mongoose.models.Message || mongoose.model('Message', messageSchema);
+delete mongoose.models.Message;
+const Message = mongoose.model('Message', messageSchema);
 
 export default Message;

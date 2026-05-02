@@ -23,6 +23,8 @@ const conversationMemberSchema = new Schema(
     isPinned: { type: Boolean, default: false },
     unreadCount: { type: Number, default: 0 },
     joinedAt: { type: Date, default: Date.now },
+    isArchived: { type: Boolean, default: false },
+    archivedAt: { type: Date, default: null },
   },
   {
     timestamps: { createdAt: 'createdAt', updatedAt: 'updatedAt' },

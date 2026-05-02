@@ -9,7 +9,7 @@ import Message from '@/models/Message';
 import { getPusherServer } from '@/lib/pusher-server';
 import User from '@/models/User';
 
-function serializeMessage(message, sender, replyToMessage, replyToSender) {
+function serializeMessage(message, sender, replyToMessage, replyToSender, usersById = new Map()) {
   const serialized = {
     id: message._id.toString(),
     senderId: message.senderId.toString(),
@@ -27,6 +27,13 @@ function serializeMessage(message, sender, replyToMessage, replyToSender) {
     isEdited: Boolean(message.isEdited),
     editedAt: message.editedAt || undefined,
     reactions: message.reactions || {},
+    isForwarded: Boolean(message.isForwarded),
+    waveform: message.waveform || [],
+    readBy: (message.readBy || []).map(r => ({
+      userId: r.userId.toString(),
+      name: usersById.get(r.userId.toString())?.name || 'Unknown',
+      readAt: r.readAt
+    })),
   };
 
   if (replyToMessage) {
@@ -74,6 +81,10 @@ export async function GET(request, context) {
   const messages = await Message.find({
     conversationId,
     hiddenFor: { $ne: authUser._id },
+    $or: [
+      { status: { $ne: 'scheduled' } },
+      { senderId: authUser._id, status: 'scheduled' }
+    ]
   }).sort({ createdAt: 1 }).lean();
   const senderIds = [...new Set(messages.map((message) => message.senderId.toString()))].map(
     (senderId) => new mongoose.Types.ObjectId(senderId)
@@ -99,6 +110,36 @@ export async function GET(request, context) {
     extraUsers.forEach((u) => usersById.set(u._id.toString(), u));
   }
 
+  const unreadMessages = messages.filter(m => 
+    m.senderId.toString() !== authUser._id.toString() &&
+    !(m.readBy || []).some(r => r.userId.toString() === authUser._id.toString())
+  );
+
+  if (unreadMessages.length > 0) {
+    const unreadIds = unreadMessages.map(m => m._id);
+    const now = new Date();
+    await Message.updateMany(
+      { _id: { $in: unreadIds } },
+      { $push: { readBy: { userId: authUser._id, readAt: now } } }
+    );
+    
+    unreadMessages.forEach(m => {
+      if (!m.readBy) m.readBy = [];
+      m.readBy.push({ userId: authUser._id, readAt: now });
+    });
+
+    const pusherServer = getPusherServer();
+    if (pusherServer) {
+      pusherServer.trigger(`private-conversation-${conversationId.toString()}`, 'messages-read', {
+        conversationId: conversationId.toString(),
+        userId: authUser._id.toString(),
+        userName: authUser.name,
+        messageIds: unreadIds.map(id => id.toString()),
+        readAt: now.toISOString()
+      }).catch(console.error);
+    }
+  }
+
   return NextResponse.json({
     messages: messages.map((message) => {
       const replyTo = message.replyToId ? replyToById.get(message.replyToId.toString()) : null;
@@ -107,7 +148,8 @@ export async function GET(request, context) {
         message,
         usersById.get(message.senderId.toString()),
         replyTo,
-        replyToSender
+        replyToSender,
+        usersById
       );
     }),
   });
@@ -135,6 +177,8 @@ export async function POST(request, context) {
   const body = await request.json();
   const text = (body.text || '').trim();
   const type = body.type || 'text';
+  const scheduledFor = body.scheduledFor ? new Date(body.scheduledFor) : null;
+  const isScheduled = scheduledFor && scheduledFor > new Date();
 
   if (!text && type === 'text') {
     return NextResponse.json({ error: 'Message text is required' }, { status: 400 });
@@ -150,42 +194,48 @@ export async function POST(request, context) {
     senderId: authUser._id,
     text,
     type,
-    status: 'sent',
+    status: isScheduled ? 'scheduled' : 'sent',
+    scheduledFor: isScheduled ? scheduledFor : null,
     fileUrl: body.fileUrl || '',
     fileName: body.fileName || '',
     fileSize: body.fileSize || '',
     duration: body.duration || '',
+    waveform: body.waveform || [],
     replyToId: body.replyToId && mongoose.Types.ObjectId.isValid(body.replyToId)
       ? new mongoose.Types.ObjectId(body.replyToId)
       : null,
   });
 
-  conversation.lastMessage = text || type;
-  conversation.lastMessageTime = new Date();
-  await conversation.save();
+  if (!isScheduled) {
+    conversation.lastMessage = text || type;
+    conversation.lastMessageTime = new Date();
+    await conversation.save();
 
-  await ConversationMember.updateMany(
-    {
-      conversationId,
-      userId: { $ne: authUser._id },
-    },
-    {
-      $inc: { unreadCount: 1 },
-    }
-  );
+    await ConversationMember.updateMany(
+      {
+        conversationId,
+        userId: { $ne: authUser._id },
+      },
+      {
+        $inc: { unreadCount: 1 },
+      }
+    );
+  }
 
   const sender = await User.findById(authUser._id).lean();
   const serializedMessage = serializeMessage(message.toObject(), sender);
 
-  const pusherServer = getPusherServer();
-  if (pusherServer) {
-    try {
-      await pusherServer.trigger(`private-conversation-${conversationId.toString()}`, 'new-message', {
-        conversationId: conversationId.toString(),
-        message: serializedMessage,
-      });
-    } catch {
-      // Don't fail message delivery when realtime publish fails.
+  if (!isScheduled) {
+    const pusherServer = getPusherServer();
+    if (pusherServer) {
+      try {
+        await pusherServer.trigger(`private-conversation-${conversationId.toString()}`, 'new-message', {
+          conversationId: conversationId.toString(),
+          message: serializedMessage,
+        });
+      } catch {
+        // Don't fail message delivery when realtime publish fails.
+      }
     }
   }
 

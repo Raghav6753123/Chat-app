@@ -112,7 +112,7 @@ export default function CallOverlay({
 
   useEffect(() => {
     if (activeCall?.type === 'outgoing') {
-      setCallState('calling');
+      setTimeout(() => setCallState('calling'), 0);
       setupWebRTC(true);
     }
   }, [activeCall?.type, setupWebRTC]);
@@ -147,6 +147,7 @@ export default function CallOverlay({
       
       if (data.signalType === 'answer' && pc) {
         await pc.setRemoteDescription(new RTCSessionDescription(data.sdp)).catch(console.error);
+        setCallState('connected');
       } else if (data.signalType === 'ice-candidate') {
         if (pc && pc.remoteDescription) {
           await pc.addIceCandidate(new RTCIceCandidate(data.candidate)).catch(console.error);

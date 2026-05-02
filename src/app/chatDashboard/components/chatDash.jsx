@@ -102,6 +102,15 @@ export default function ChatDashboard() {
     [conversationIdList]
   );
 
+  // Background polling for scheduled messages
+  useEffect(() => {
+    if (!currentUser?.id) return;
+    const interval = setInterval(() => {
+      fetch('/api/cron/process-scheduled-messages', { method: 'POST' }).catch(console.error);
+    }, 30000);
+    return () => clearInterval(interval);
+  }, [currentUser?.id]);
+
   useEffect(() => {
     if (!currentUser?.id || !conversationIdList.length) {
       return undefined;
@@ -126,8 +135,15 @@ export default function ChatDashboard() {
 
         setMessagesByConversation((prev) => {
           const existing = prev[incomingConversationId] || [];
-          if (existing.some((message) => message.id === incomingMessage.id)) {
-            return prev;
+          const existingIndex = existing.findIndex((message) => message.id === incomingMessage.id);
+          
+          if (existingIndex >= 0) {
+            const nextList = [...existing];
+            nextList[existingIndex] = incomingMessage;
+            return {
+              ...prev,
+              [incomingConversationId]: nextList,
+            };
           }
 
           return {
@@ -688,7 +704,7 @@ export default function ChatDashboard() {
   };
 
   return (
-    <div className="h-screen flex bg-slate-50 overflow-hidden font-sans antialiased selection:bg-sky-200 selection:text-sky-900 transition-colors duration-300">
+    <div className="h-screen flex bg-[#f8fafc] overflow-hidden font-sans antialiased selection:bg-sky-200 selection:text-sky-900 transition-colors duration-300">
       <Toaster position="bottom-right" richColors toastOptions={{ className: 'rounded-xl shadow-lg border-0 bg-white/90 backdrop-blur-sm' }} />
 
       {/* Render CallOverlay ALWAYS */}
@@ -702,7 +718,7 @@ export default function ChatDashboard() {
       />
 
       {/* Left — Conversation list */}
-      <div className={`w-full md:w-80 xl:w-96 shrink-0 bg-white shadow-[1px_0_10px_-5px_rgba(0,0,0,0.1)] border-r border-slate-100 flex flex-col h-full z-10 transition-transform duration-300 ${activeConversationId ? 'hidden md:flex' : 'flex'}`}>
+      <div className={`w-full md:w-80 xl:w-96 shrink-0 bg-white border-r border-slate-200/60 flex flex-col h-full z-10 transition-transform duration-300 ${activeConversationId ? 'hidden md:flex' : 'flex'}`}>
         <ConversationList
           conversations={filteredConversations}
           activeId={activeConversationId}
@@ -718,7 +734,7 @@ export default function ChatDashboard() {
       </div>
 
       {/* Center — Chat window */}
-      <div className={`flex-1 flex flex-col h-full min-w-0 bg-slate-50 relative z-0 shadow-[inset_0_0_10px_2px_rgba(0,0,0,0.01)] transition-all duration-300 ${activeConversationId ? 'flex' : 'hidden md:flex'}`}>
+      <div className={`flex-1 flex flex-col h-full min-w-0 bg-transparent relative z-0 transition-all duration-300 ${activeConversationId ? 'flex' : 'hidden md:flex'}`}>
         {isLoading ? (
           <div className="flex h-full items-center justify-center px-6">
             <div className="text-center">
@@ -754,7 +770,7 @@ export default function ChatDashboard() {
 
       {/* Right — Info panel */}
       {showInfoPanel && activeConversation && (
-        <div className="w-72 xl:w-80 shrink-0 bg-white border-l border-gray-100 flex flex-col h-full">
+        <div className="w-72 xl:w-80 shrink-0 bg-white border-l border-slate-200/60 flex flex-col h-full">
           <ContactInfoPanel
             conversation={activeConversation}
             currentUserId={currentUser?.id}

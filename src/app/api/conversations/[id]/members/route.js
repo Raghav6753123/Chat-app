@@ -67,6 +67,7 @@ async function buildConversationSummaryForUser(userId, conversationId) {
     unreadCount: membership.unreadCount || 0,
     isMuted: Boolean(membership.isMuted),
     isPinned: Boolean(membership.isPinned),
+    isArchived: Boolean(membership.isArchived),
     members: conversation.memberCount || members.length,
     memberRole: role,
     canManageGroup: Boolean(
@@ -404,6 +405,11 @@ export async function PATCH(request, context) {
     updates.isPinned = body.isPinned;
   }
 
+  if (typeof body.isArchived === 'boolean') {
+    updates.isArchived = body.isArchived;
+    updates.archivedAt = body.isArchived ? new Date() : null;
+  }
+
   if (!Object.keys(updates).length) {
     return NextResponse.json({ error: 'No valid preference updates provided' }, { status: 400 });
   }
@@ -418,6 +424,7 @@ export async function PATCH(request, context) {
     preferences: {
       isMuted: Boolean(updated.isMuted),
       isPinned: Boolean(updated.isPinned),
+      isArchived: Boolean(updated.isArchived),
     },
   });
 }

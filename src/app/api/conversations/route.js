@@ -86,6 +86,7 @@ async function buildConversationSummaries(authUserId) {
         unreadCount: membership.unreadCount || 0,
         isMuted: Boolean(membership.isMuted),
         isPinned: Boolean(membership.isPinned),
+        isArchived: Boolean(membership.isArchived),
         members: conversation.memberCount || members.length,
         memberRole: membership.role || 'member',
         canManageGroup: Boolean(

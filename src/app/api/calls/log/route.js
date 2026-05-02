@@ -38,10 +38,14 @@ export async function POST(request) {
       return NextResponse.json({ error: 'Not a member' }, { status: 403 });
     }
 
+    let normalizedStatus = callStatus;
+    if (callStatus === 'rejected') normalizedStatus = 'missed';
+    if (callStatus === 'failed') normalizedStatus = 'missed';
+
     let summaryText = '';
-    if (callStatus === 'missed') {
+    if (normalizedStatus === 'missed') {
       summaryText = `Missed ${callType} call`;
-    } else if (callStatus === 'cancelled') {
+    } else if (normalizedStatus === 'cancelled') {
       summaryText = `Cancelled ${callType} call`;
     } else {
       summaryText = `${callType === 'video' ? 'Video' : 'Voice'} call - ${durationText}`;
@@ -53,7 +57,7 @@ export async function POST(request) {
       text: summaryText,
       type: 'call_log',
       callType,
-      callStatus,
+      callStatus: normalizedStatus,
       duration: durationText || '',
       status: 'sent',
     });

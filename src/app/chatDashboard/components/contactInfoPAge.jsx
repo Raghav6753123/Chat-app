@@ -371,8 +371,8 @@ export default function ContactInfoPanel({
 
   return (
     <div className="flex flex-col h-full overflow-y-auto chat-scrollbar">
-      <div className="px-4 py-3 border-b border-gray-100 flex items-center justify-between shrink-0">
-        <p className="text-sm font-700 text-gray-900">
+      <div className="px-5 py-4 border-b border-slate-100/60 flex items-center justify-between shrink-0">
+        <p className="text-[15px] font-600 text-slate-800">
           {conversation.isGroup ? 'Group info' : 'Contact info'}
         </p>
         <button
@@ -383,9 +383,9 @@ export default function ContactInfoPanel({
         </button>
       </div>
 
-      <div className="flex flex-col items-center gap-3 px-6 py-6 border-b border-gray-50">
+      <div className="flex flex-col items-center gap-4 px-6 py-8 border-b border-slate-100/60 bg-slate-50/30">
         <div className="relative">
-          <div className="w-20 h-20 rounded-full overflow-hidden bg-gray-100 ring-4 ring-sky-100">
+          <div className="w-24 h-24 rounded-full overflow-hidden bg-slate-100 ring-4 ring-white shadow-md shadow-slate-200/50">
             <AppImage
               src={conversation.avatar}
               alt={conversation.avatarAlt}
@@ -431,43 +431,43 @@ export default function ContactInfoPanel({
           )}
         </div>
 
-        <div className="flex items-center gap-3 mt-1">
+        <div className="flex items-center gap-2 mt-2 w-full justify-center">
           <button
             onClick={() => onStartCall?.(conversation.id, 'voice')}
-            className="flex flex-col items-center gap-1 group"
+            className="flex flex-col items-center gap-1.5 group flex-1"
           >
-            <div className="w-10 h-10 bg-sky-50 hover:bg-sky-100 rounded-xl flex items-center justify-center transition-colors duration-150 group-active:scale-95">
-              <Phone size={18} className="text-sky-600" />
+            <div className="w-12 h-12 bg-white border border-slate-200/60 hover:bg-slate-50 hover:border-slate-300 rounded-2xl flex items-center justify-center transition-all duration-200 group-active:scale-95 shadow-sm">
+              <Phone size={18} className="text-slate-600 group-hover:text-sky-600 transition-colors" />
             </div>
-            <span className="text-xs text-gray-400 group-hover:text-gray-600">Call</span>
+            <span className="text-[11px] font-500 text-slate-500">Call</span>
           </button>
           <button
             onClick={() => onStartCall?.(conversation.id, 'video')}
-            className="flex flex-col items-center gap-1 group"
+            className="flex flex-col items-center gap-1.5 group flex-1"
           >
-            <div className="w-10 h-10 bg-sky-50 hover:bg-sky-100 rounded-xl flex items-center justify-center transition-colors duration-150 group-active:scale-95">
-              <Video size={18} className="text-sky-600" />
+            <div className="w-12 h-12 bg-white border border-slate-200/60 hover:bg-slate-50 hover:border-slate-300 rounded-2xl flex items-center justify-center transition-all duration-200 group-active:scale-95 shadow-sm">
+              <Video size={18} className="text-slate-600 group-hover:text-sky-600 transition-colors" />
             </div>
-            <span className="text-xs text-gray-400 group-hover:text-gray-600">Video</span>
+            <span className="text-[11px] font-500 text-slate-500">Video</span>
           </button>
           <button
             onClick={() => toast.info('Email copied')}
-            className="flex flex-col items-center gap-1 group"
+            className="flex flex-col items-center gap-1.5 group flex-1"
           >
-            <div className="w-10 h-10 bg-sky-50 hover:bg-sky-100 rounded-xl flex items-center justify-center transition-colors duration-150 group-active:scale-95">
-              <Mail size={18} className="text-sky-600" />
+            <div className="w-12 h-12 bg-white border border-slate-200/60 hover:bg-slate-50 hover:border-slate-300 rounded-2xl flex items-center justify-center transition-all duration-200 group-active:scale-95 shadow-sm">
+              <Mail size={18} className="text-slate-600 group-hover:text-sky-600 transition-colors" />
             </div>
-            <span className="text-xs text-gray-400 group-hover:text-gray-600">Email</span>
+            <span className="text-[11px] font-500 text-slate-500">Email</span>
           </button>
           {conversation.isGroup && (
             <button
               onClick={loadMembers}
-              className="flex flex-col items-center gap-1 group"
+              className="flex flex-col items-center gap-1.5 group flex-1"
             >
-              <div className="w-10 h-10 bg-sky-50 hover:bg-sky-100 rounded-xl flex items-center justify-center transition-colors duration-150 group-active:scale-95">
-                <Users size={18} className="text-sky-600" />
+              <div className="w-12 h-12 bg-white border border-slate-200/60 hover:bg-slate-50 hover:border-slate-300 rounded-2xl flex items-center justify-center transition-all duration-200 group-active:scale-95 shadow-sm">
+                <Users size={18} className="text-slate-600 group-hover:text-sky-600 transition-colors" />
               </div>
-              <span className="text-xs text-gray-400 group-hover:text-gray-600">Refresh</span>
+              <span className="text-[11px] font-500 text-slate-500">Members</span>
             </button>
           )}
         </div>
@@ -555,7 +555,7 @@ export default function ContactInfoPanel({
         </div>
       )}
 
-      <div className="border-b border-gray-50">
+      <div className="border-b border-slate-100/60">
         <button
           onClick={() => setShowMedia(!showMedia)}
           className="w-full px-4 py-3 flex items-center justify-between hover:bg-gray-50 transition-colors"
@@ -605,7 +605,7 @@ export default function ContactInfoPanel({
         )}
       </div>
 
-      <div className="border-b border-gray-50">
+      <div className="border-b border-slate-100/60">
         <button
           onClick={() => setShowFiles(!showFiles)}
           className="w-full px-4 py-3 flex items-center justify-between hover:bg-gray-50 transition-colors"
