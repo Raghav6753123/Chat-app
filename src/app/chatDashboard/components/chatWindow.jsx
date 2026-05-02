@@ -60,6 +60,7 @@ export default function ChatWindow({
   onBack,
   showInfo,
   onStartCall,
+  conversations = [],
 }) {
   const [inputText, setInputText] = useState('');
   const [showEmoji, setShowEmoji] = useState(false);
@@ -93,6 +94,19 @@ export default function ChatWindow({
   const fileInputRef = useRef(null);
   const typingTimeoutRef = useRef(null);
   const isTypingRef = useRef(false);
+
+  // Forward
+  const [forwardingMessage, setForwardingMessage] = useState(null);
+  const [forwardSearchQuery, setForwardSearchQuery] = useState('');
+  const [forwardSelectedIds, setForwardSelectedIds] = useState([]);
+  const [isForwarding, setIsForwarding] = useState(false);
+
+  // Voice recording
+  const [isRecording, setIsRecording] = useState(false);
+  const [recordingDuration, setRecordingDuration] = useState(0);
+  const mediaRecorderRef = useRef(null);
+  const audioChunksRef = useRef([]);
+  const recordingIntervalRef = useRef(null);
 
   const handleAnalyze = async (tone = analyzeTone) => {
     setIsAnalyzing(true);
@@ -491,6 +505,114 @@ export default function ChatWindow({
     return `${activeTypingUsers[0]} and ${activeTypingUsers.length - 1} others are typing...`;
   }, [activeTypingUsers]);
 
+  const handleForwardMessage = async () => {
+    if (!forwardingMessage || forwardSelectedIds.length === 0) return;
+    setIsForwarding(true);
+    try {
+      const res = await fetch(`/api/conversations/${conversation.id}/messages/${forwardingMessage.id}/forward`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ targetConversationIds: forwardSelectedIds })
+      });
+      if (!res.ok) throw new Error('Failed to forward');
+      const data = await res.json();
+      toast.success('Message forwarded');
+      setForwardingMessage(null);
+      setForwardSelectedIds([]);
+    } catch {
+      toast.error('Failed to forward message');
+    } finally {
+      setIsForwarding(false);
+    }
+  };
+
+  const formatDuration = (seconds) => {
+    const m = Math.floor(seconds / 60);
+    const s = seconds % 60;
+    return `${m}:${s.toString().padStart(2, '0')}`;
+  };
+
+  const startRecording = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const mediaRecorder = new MediaRecorder(stream);
+      mediaRecorderRef.current = mediaRecorder;
+      audioChunksRef.current = [];
+      
+      mediaRecorder.ondataavailable = (e) => {
+        if (e.data.size > 0) audioChunksRef.current.push(e.data);
+      };
+      
+      mediaRecorder.start();
+      setIsRecording(true);
+      setRecordingDuration(0);
+      recordingIntervalRef.current = setInterval(() => {
+        setRecordingDuration(prev => prev + 1);
+      }, 1000);
+    } catch {
+      toast.error('Microphone access is needed to record voice messages.');
+    }
+  };
+
+  const cancelRecording = () => {
+    if (mediaRecorderRef.current && isRecording) {
+      mediaRecorderRef.current.stop();
+      mediaRecorderRef.current.stream.getTracks().forEach(t => t.stop());
+    }
+    clearInterval(recordingIntervalRef.current);
+    setIsRecording(false);
+    setRecordingDuration(0);
+    audioChunksRef.current = [];
+  };
+
+  const sendRecording = () => {
+    if (mediaRecorderRef.current && isRecording) {
+      mediaRecorderRef.current.onstop = async () => {
+        mediaRecorderRef.current.stream.getTracks().forEach(t => t.stop());
+        clearInterval(recordingIntervalRef.current);
+        setIsRecording(false);
+        const durationStr = formatDuration(recordingDuration);
+        setRecordingDuration(0);
+
+        const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
+        const formData = new FormData();
+        formData.append('file', audioBlob, 'voice-message.webm');
+
+        setIsUploading(true);
+        try {
+          const uploadRes = await fetch('/api/uploads', { method: 'POST', body: formData });
+          if (!uploadRes.ok) throw new Error('Upload failed');
+          const uploadPayload = await uploadRes.json();
+
+          const waveformData = Array.from({ length: 40 }, () => Math.random());
+
+          const msgRes = await fetch(`/api/conversations/${conversation.id}/messages`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              type: 'voice',
+              text: '',
+              fileUrl: uploadPayload.url,
+              fileName: 'voice-message.webm',
+              fileSize: formatFileSize(uploadPayload.sizeBytes),
+              duration: durationStr,
+              waveform: waveformData,
+            })
+          });
+
+          const messagePayload = await msgRes.json();
+          if (!msgRes.ok) throw new Error(messagePayload.error || 'Failed to send voice message');
+          onMessageSent?.(conversation.id, messagePayload.message);
+        } catch (err) {
+          toast.error(err.message || 'Failed to send voice message');
+        } finally {
+          setIsUploading(false);
+        }
+      };
+      mediaRecorderRef.current.stop();
+    }
+  };
+
   const copyMessageText = async (text) => {
     const value = String(text || '').trim();
     if (!value) {
@@ -799,6 +921,7 @@ export default function ChatWindow({
                   onDeleteForEveryone={() => setConfirmDelete({ id: message.id, scope: 'everyone' })}
                   onEditMessage={() => startEditMessage(message)}
                   onReact={(emoji) => toggleReaction(message.id, emoji)}
+                  onForward={() => { setForwardingMessage(message); setForwardSelectedIds([]); }}
                   onImageClick={(url, name) => setViewerImage({ url, name })}
                   onStartCall={() => onStartCall?.(conversation.id, message.callType || 'voice')}
                   senderName={
@@ -1059,22 +1182,35 @@ export default function ChatWindow({
           <CalendarClock size={19} />
         </button>
 
-        <div className="flex-1 relative">
-          <input
-            ref={inputRef}
-            type="text"
-            placeholder="Type a message..."
-            value={inputText}
-            onChange={handleInputChange}
-            onBlur={() => emitTyping(false)}
-            onKeyDown={handleKeyDown}
-            className="w-full bg-slate-50 border border-slate-200/60 rounded-full px-4 py-2.5 text-sm text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-4 focus:ring-sky-500/10 focus:border-sky-400 transition-all duration-200"
-          />
-        </div>
+        {isRecording ? (
+          <div className="flex-1 flex items-center gap-3 bg-red-50 text-red-600 rounded-full px-4 py-2 text-sm border border-red-100">
+            <div className="w-2 h-2 rounded-full bg-red-600 animate-pulse" />
+            <span className="font-medium font-mono tracking-wider">{formatDuration(recordingDuration)}</span>
+            <div className="flex-1 flex items-center gap-1 h-4 overflow-hidden">
+              {[...Array(30)].map((_, i) => (
+                <div key={i} className="w-1 bg-red-300 rounded-full animate-pulse" style={{ height: `${20 + Math.random() * 80}%`, animationDelay: `${i * 0.05}s` }} />
+              ))}
+            </div>
+            <button onClick={cancelRecording} className="text-red-500 hover:text-red-700 hover:bg-red-100 p-1 rounded-full transition-colors"><X size={16} /></button>
+          </div>
+        ) : (
+          <div className="flex-1 relative">
+            <input
+              ref={inputRef}
+              type="text"
+              placeholder="Type a message..."
+              value={inputText}
+              onChange={handleInputChange}
+              onBlur={() => emitTyping(false)}
+              onKeyDown={handleKeyDown}
+              className="w-full bg-slate-50 border border-slate-200/60 rounded-full px-4 py-2.5 text-sm text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-4 focus:ring-sky-500/10 focus:border-sky-400 transition-all duration-200"
+            />
+          </div>
+        )}
 
-        {inputText.trim() ? (
+        {inputText.trim() || isRecording ? (
           <button
-            onClick={sendMessage}
+            onClick={isRecording ? sendRecording : sendMessage}
             className="w-10 h-10 flex items-center justify-center rounded-xl bg-sky-500 hover:bg-sky-600 active:scale-95 text-white transition-all duration-150 shadow-sm shadow-sky-200 flex-shrink-0"
             title="Send message"
           >
@@ -1082,7 +1218,7 @@ export default function ChatWindow({
           </button>
         ) : (
           <button
-            onClick={() => (isUploading ? null : toast.info('Voice recording coming soon'))}
+            onClick={() => (isUploading ? null : startRecording())}
             className="w-10 h-10 flex items-center justify-center rounded-xl text-gray-400 hover:bg-gray-100 hover:text-sky-600 transition-all duration-150 flex-shrink-0"
             title={isUploading ? 'Uploading...' : 'Record voice message'}
           >
@@ -1097,6 +1233,65 @@ export default function ChatWindow({
           </button>
         )}
       </div>
+
+      {/* Forward Modal */}
+      {isForwarding && (
+        <div className="absolute inset-0 bg-white/50 backdrop-blur-sm z-50 flex items-center justify-center">
+          <RefreshCw size={24} className="text-sky-500 animate-spin" />
+        </div>
+      )}
+      
+      {forwardingMessage && (
+        <div className="absolute inset-0 bg-black/50 z-40 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm overflow-hidden flex flex-col">
+            <div className="px-4 py-3 border-b border-slate-100 flex items-center justify-between bg-slate-50">
+              <h3 className="font-semibold text-slate-800">Forward Message</h3>
+              <button onClick={() => { setForwardingMessage(null); setForwardSelectedIds([]); }} className="text-slate-400 hover:text-slate-600 bg-white rounded-full p-1 shadow-sm"><X size={16} /></button>
+            </div>
+            <div className="p-3">
+              <div className="relative">
+                <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                <input 
+                  type="text" 
+                  value={forwardSearchQuery} 
+                  onChange={e => setForwardSearchQuery(e.target.value)} 
+                  placeholder="Search chats..." 
+                  className="w-full pl-9 pr-3 py-2 text-sm bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:border-sky-400"
+                />
+              </div>
+            </div>
+            <div className="flex-1 overflow-y-auto max-h-64 px-2 chat-scrollbar">
+              {conversations.filter(c => c.name.toLowerCase().includes(forwardSearchQuery.toLowerCase())).map(c => {
+                const isSelected = forwardSelectedIds.includes(c.id);
+                return (
+                  <button
+                    key={c.id}
+                    onClick={() => setForwardSelectedIds(prev => isSelected ? prev.filter(id => id !== c.id) : [...prev, c.id])}
+                    className={`w-full flex items-center gap-3 p-2 rounded-xl transition-colors ${isSelected ? 'bg-sky-50' : 'hover:bg-slate-50'}`}
+                  >
+                    <div className="w-10 h-10 rounded-full overflow-hidden shrink-0 relative bg-gray-100">
+                      <AppImage src={c.avatar} alt={c.avatarAlt} width={40} height={40} className="w-full h-full object-cover" />
+                      {isSelected && <div className="absolute inset-0 bg-sky-500/80 flex items-center justify-center text-white"><Check size={16} /></div>}
+                    </div>
+                    <div className="flex-1 text-left min-w-0">
+                      <p className={`text-sm truncate ${isSelected ? 'font-semibold text-sky-900' : 'font-medium text-slate-800'}`}>{c.name}</p>
+                    </div>
+                  </button>
+                )
+              })}
+            </div>
+            <div className="p-3 border-t border-slate-100 bg-slate-50">
+              <button
+                disabled={forwardSelectedIds.length === 0}
+                onClick={handleForwardMessage}
+                className="w-full py-2.5 bg-sky-500 hover:bg-sky-600 disabled:bg-slate-300 text-white rounded-xl text-sm font-semibold transition-colors flex items-center justify-center gap-2"
+              >
+                Forward {forwardSelectedIds.length > 0 && `(${forwardSelectedIds.length})`}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -1112,6 +1307,7 @@ function MessageBubble({
   onDeleteForEveryone,
   onEditMessage,
   onReact,
+  onForward,
   onImageClick,
   onStartCall,
   senderName,
@@ -1142,6 +1338,12 @@ function MessageBubble({
       )}
 
       <div className={`max-w-[65%] flex flex-col gap-0.5 ${isMine ? 'items-end' : 'items-start'}`}>
+        {message.isForwarded && (
+          <div className={`flex items-center gap-1 text-[10px] font-medium italic ${isMine ? 'text-sky-700/70' : 'text-gray-400'} px-1 mb-0.5`}>
+            <Reply size={10} className="scale-x-[-1]" />
+            Forwarded
+          </div>
+        )}
         {senderName && !isConsecutive && (
           <p className="text-xs font-semibold text-sky-600 px-1">{senderName}</p>
         )}
@@ -1261,6 +1463,25 @@ function MessageBubble({
               </button>
             </div>
           </div>
+        ) : message.type === 'voice' ? (
+          <div className={`flex items-center gap-3 px-4 py-2.5 shadow-sm rounded-2xl min-w-[200px] ${
+            isMine ? 'message-bubble-sent' : 'message-bubble-received'
+          }`}>
+            <button onClick={() => {
+              const audio = new Audio(attachmentUrl);
+              audio.play();
+            }} className={`w-8 h-8 flex items-center justify-center rounded-full flex-shrink-0 ${isMine ? 'bg-white text-sky-600' : 'bg-sky-100 text-sky-600'}`}>
+              <Mic size={14} />
+            </button>
+            <div className="flex-1">
+              <div className="flex items-center gap-1 h-6">
+                {(message.waveform?.length ? message.waveform.slice(0, 20) : Array.from({length: 20}, () => Math.random())).map((w, i) => (
+                  <div key={i} className={`w-1 rounded-full ${isMine ? 'bg-white/60' : 'bg-slate-300'}`} style={{ height: `${Math.max(20, w * 100)}%` }} />
+                ))}
+              </div>
+            </div>
+            <span className={`text-[10px] font-medium ${isMine ? 'text-sky-100' : 'text-slate-500'}`}>{message.duration || '0:00'}</span>
+          </div>
         ) : (
           <div className={`px-4 py-2.5 shadow-sm ${
             isMine ? 'message-bubble-sent' : 'message-bubble-received'
@@ -1294,10 +1515,18 @@ function MessageBubble({
         )}
 
         {/* Timestamp + status + edited */}
-        <div className={`flex items-center gap-1 px-1 ${isMine ? 'flex-row-reverse' : 'flex-row'}`}>
-          <span className={`text-xs ${isMine ? 'text-sky-700' : 'text-gray-400'}`}>{message.timestamp}</span>
-          {message.isEdited && <span className="text-xs text-gray-400 italic">edited</span>}
+        <div className={`flex items-center gap-1.5 px-1 mt-0.5 ${isMine ? 'flex-row-reverse' : 'flex-row'}`}>
+          <span className={`text-[10px] ${isMine ? 'text-sky-700/80' : 'text-gray-400'}`}>{message.timestamp}</span>
+          {message.isEdited && <span className="text-[10px] text-gray-400 italic">edited</span>}
           {isMine && <MessageStatus status={message.status} />}
+          {isMine && message.readBy?.length > 0 && (
+            <span 
+              className="text-[10px] text-sky-600 font-medium cursor-help"
+              title={`Read by: ${message.readBy.map(r => r.name).join(', ')}`}
+            >
+              Seen{message.readBy.length > 1 ? ` by ${message.readBy.length}` : ''}
+            </span>
+          )}
         </div>
       </div>
 
@@ -1322,6 +1551,16 @@ function MessageBubble({
               <Copy size={14} />
               Copy
             </button>
+            {message.type !== 'call_log' && (
+              <button
+                type="button"
+                onClick={() => { setShowActions(false); onForward?.(); }}
+                className="w-full flex items-center gap-2 px-3 py-2 text-sm text-slate-700 hover:bg-slate-50 rounded-lg"
+              >
+                <Reply size={14} className="scale-x-[-1]" />
+                Forward
+              </button>
+            )}
             {/* React button */}
             <div className="relative">
               <button

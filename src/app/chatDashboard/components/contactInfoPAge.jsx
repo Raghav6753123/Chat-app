@@ -20,6 +20,7 @@ import {
   UserPlus,
   UserMinus,
   Save,
+  Archive,
 } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -38,6 +39,7 @@ export default function ContactInfoPanel({
   const [showFiles, setShowFiles] = useState(true);
   const [isMuted, setIsMuted] = useState(conversation.isMuted);
   const [isPinned, setIsPinned] = useState(conversation.isPinned);
+  const [isArchived, setIsArchived] = useState(conversation.isArchived);
   const [sharedMedia, setSharedMedia] = useState([]);
   const [sharedFiles, setSharedFiles] = useState([]);
   const [isLoadingShared, setIsLoadingShared] = useState(false);
@@ -81,6 +83,7 @@ export default function ContactInfoPanel({
   useEffect(() => {
     setIsMuted(conversation.isMuted);
     setIsPinned(conversation.isPinned);
+    setIsArchived(conversation.isArchived);
     setGroupNameDraft(conversation.name || '');
   }, [conversation]);
 
@@ -214,6 +217,19 @@ export default function ContactInfoPanel({
     } catch (error) {
       setIsPinned(!next);
       toast.error(error.message || 'Unable to update pin preference');
+    }
+  };
+
+  const toggleArchive = async () => {
+    const next = !isArchived;
+    setIsArchived(next);
+
+    try {
+      await updatePreferences({ isArchived: next });
+      toast.success(next ? 'Conversation archived' : 'Conversation unarchived');
+    } catch (error) {
+      setIsArchived(!next);
+      toast.error(error.message || 'Unable to update archive preference');
     }
   };
 
@@ -697,6 +713,23 @@ export default function ContactInfoPanel({
               {isPinned ? 'Unpin conversation' : 'Pin conversation'}
             </p>
             {isPinned && <p className="text-xs text-sky-500">Pinned to top</p>}
+          </div>
+        </button>
+
+        <button
+          onClick={toggleArchive}
+          className="flex items-center gap-3 px-3 py-2.5 rounded-xl hover:bg-gray-50 transition-colors duration-150 text-left group"
+        >
+          <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${
+            isArchived ? 'bg-sky-50' : 'bg-gray-100'
+          }`}>
+            <Archive size={15} className={isArchived ? 'text-sky-600' : 'text-gray-500'} />
+          </div>
+          <div>
+            <p className="text-sm font-500 text-gray-700">
+              {isArchived ? 'Unarchive conversation' : 'Archive conversation'}
+            </p>
+            {isArchived && <p className="text-xs text-sky-500">Currently archived</p>}
           </div>
         </button>
 

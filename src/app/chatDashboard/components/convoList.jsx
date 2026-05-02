@@ -38,6 +38,8 @@ export default function ConversationList({
   const actionsMenuRef = useRef(null);
 
   const filtered = conversations.filter((c) => {
+    if (activeFilter === 'archived') return c.isArchived;
+    if (c.isArchived) return false;
     if (activeFilter === 'unread') return c.unreadCount > 0;
     if (activeFilter === 'groups') return c.isGroup;
     if (activeFilter === 'calls') return false; // Handled separately or we can show conversations with calls
@@ -243,6 +245,7 @@ export default function ConversationList({
             { key: 'unread', label: 'Unread' },
             { key: 'groups', label: 'Groups' },
             { key: 'calls', label: 'Calls' },
+            { key: 'archived', label: 'Archived' },
           ].map((f) => (
             <button
               key={`filter-${f.key}`}

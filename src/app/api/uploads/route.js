@@ -16,8 +16,12 @@ const ALLOWED_MIME_TYPES = new Set([
   'text/plain',
   'application/msword',
   'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-  'application/vnd.ms-excel',
   'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  'audio/webm',
+  'audio/mpeg',
+  'audio/mp4',
+  'audio/wav',
+  'audio/ogg',
 ]);
 
 function sanitizeName(name) {
@@ -33,9 +37,13 @@ function extensionFromMime(mimeType) {
     'application/pdf': '.pdf',
     'text/plain': '.txt',
     'application/msword': '.doc',
-    'application/vnd.openxmlformats-officedocument.wordprocessingml.document': '.docx',
     'application/vnd.ms-excel': '.xls',
     'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': '.xlsx',
+    'audio/webm': '.webm',
+    'audio/mpeg': '.mp3',
+    'audio/mp4': '.mp4',
+    'audio/wav': '.wav',
+    'audio/ogg': '.ogg',
   };
 
   return map[mimeType] || '';

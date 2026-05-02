@@ -324,6 +324,28 @@ export default function ChatDashboard() {
       channel.bind('message-edited', onMessageEdited);
       channel.bind('message-reaction', onMessageReaction);
 
+      const onMessagesRead = (payload) => {
+        const cId = payload?.conversationId;
+        const msgIds = payload?.messageIds || [];
+        if (!cId || !msgIds.length) return;
+        setMessagesByConversation((prev) => ({
+          ...prev,
+          [cId]: (prev[cId] || []).map((m) => {
+            if (!msgIds.includes(m.id)) return m;
+            const newReadBy = m.readBy ? [...m.readBy] : [];
+            if (!newReadBy.some(r => r.userId === payload.userId)) {
+              newReadBy.push({
+                userId: payload.userId,
+                name: payload.userName,
+                readAt: payload.readAt,
+              });
+            }
+            return { ...m, readBy: newReadBy };
+          }),
+        }));
+      };
+      channel.bind('messages-read', onMessagesRead);
+
       const onCallSignal = (payload) => {
         if (payload.senderId === currentUser?.id) return;
         if (payload.signalType === 'offer') {
@@ -344,6 +366,7 @@ export default function ChatDashboard() {
         onGroupUpdated,
         onMessageEdited,
         onMessageReaction,
+        onMessagesRead,
         onCallSignal,
       };
     });
@@ -386,6 +409,7 @@ export default function ChatDashboard() {
         onGroupUpdated,
         onMessageEdited,
         onMessageReaction,
+        onMessagesRead,
         onCallSignal,
       }) => {
         channel.unbind('new-message', onIncomingMessage);
@@ -394,6 +418,7 @@ export default function ChatDashboard() {
         channel.unbind('group-updated', onGroupUpdated);
         channel.unbind('message-edited', onMessageEdited);
         channel.unbind('message-reaction', onMessageReaction);
+        channel.unbind('messages-read', onMessagesRead);
         channel.unbind('call-signal', onCallSignal);
         pusherClient.unsubscribe(channelName);
       });
@@ -745,6 +770,7 @@ export default function ChatDashboard() {
           <ChatWindow
             key={activeConversation.id}
             conversation={activeConversation}
+            conversations={conversations}
             currentUserId={currentUser?.id}
             activeTypingUsers={Object.values(typingByConversation[activeConversation.id] || {})}
             onToggleInfo={() => setShowInfoPanel(!showInfoPanel)}
