@@ -5,6 +5,7 @@ import Conversation from '@/models/Conversation';
 import ConversationMember from '@/models/ConversationMember';
 import Message from '@/models/Message';
 import User from '@/models/User';
+import Notification from '@/models/Notification';
 import { getPusherServer } from '@/lib/pusher-server';
 import { toClockTime } from '@/lib/formatters';
 
@@ -72,6 +73,23 @@ export async function POST(request) {
           await pusherServer.trigger(`private-conversation-${msg.conversationId.toString()}`, 'new-message', {
             conversationId: msg.conversationId.toString(),
             message: serializedMessage,
+          });
+        } catch {}
+      }
+
+      // Create Notification for the sender
+      const notification = await Notification.create({
+        userId: msg.senderId,
+        type: 'scheduled_sent',
+        title: 'Scheduled message sent',
+        body: `Your message "${text.substring(0, 30)}${text.length > 30 ? '...' : ''}" was sent.`,
+        conversationId: msg.conversationId,
+      });
+
+      if (pusherServer) {
+        try {
+          await pusherServer.trigger(`private-user-${msg.senderId}`, 'notification-created', {
+            notification,
           });
         } catch {}
       }

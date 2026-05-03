@@ -1,8 +1,8 @@
 'use client';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import AppImage from '@/components/ui/AppImage';
 import AppLogo from '@/components/ui/AppLogo';
-import { Search, Plus, MoreVertical, Users, BellOff, Pin, X, PhoneCall, Phone, Video } from 'lucide-react';
+import { Search, Plus, MoreVertical, Users, BellOff, Pin, X, PhoneCall, Phone, Video, Bell } from 'lucide-react';
 import Link from 'next/link';
 import { toast } from 'sonner';
 
@@ -17,6 +17,7 @@ export default function ConversationList({
   onSearchChange,
   currentUser,
   onStartCall,
+  newNotification,
 }) {
   const [activeFilter, setActiveFilter] = useState('all'); // all, unread, groups, calls
   const [showCreateModal, setShowCreateModal] = useState(false);
@@ -34,8 +35,21 @@ export default function ConversationList({
     desktopNotifications: true,
     enterToSend: true,
     compactMode: false,
+    themeMode: 'system',
+    accentColor: 'sky',
+    chatAppearance: {
+      bubbleStyle: 'rounded',
+      density: 'comfortable',
+      fontSize: 'default',
+    }
   });
   const actionsMenuRef = useRef(null);
+
+  // Notifications
+  const [showNotifications, setShowNotifications] = useState(false);
+  const [notifications, setNotifications] = useState([]);
+  const [unreadNotificationsCount, setUnreadNotificationsCount] = useState(0);
+  const [isLoadingNotifications, setIsLoadingNotifications] = useState(false);
 
   const filtered = conversations.filter((c) => {
     if (activeFilter === 'archived') return c.isArchived;
@@ -94,6 +108,62 @@ export default function ConversationList({
     };
   }, [showActionsMenu]);
 
+  const loadNotifications = useCallback(async () => {
+    setIsLoadingNotifications(true);
+    try {
+      const res = await fetch('/api/notifications');
+      if (res.ok) {
+        const data = await res.json();
+        setNotifications(data.notifications || []);
+        setUnreadNotificationsCount(data.unreadCount || 0);
+      }
+    } catch {
+      console.error('Failed to load notifications');
+    } finally {
+      setIsLoadingNotifications(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (currentUser?.id) {
+      loadNotifications();
+    }
+  }, [currentUser?.id, loadNotifications]);
+
+  useEffect(() => {
+    if (newNotification) {
+      setNotifications(prev => {
+        if (prev.some(n => n._id === newNotification._id)) return prev;
+        return [newNotification, ...prev];
+      });
+      setUnreadNotificationsCount(prev => prev + 1);
+    }
+  }, [newNotification]);
+
+  const markNotificationAsRead = async (id, conversationId) => {
+    try {
+      await fetch(`/api/notifications/${id}`, { method: 'PATCH' });
+      setNotifications(prev => prev.map(n => n._id === id ? { ...n, readAt: new Date() } : n));
+      setUnreadNotificationsCount(prev => Math.max(0, prev - 1));
+      if (conversationId) {
+        onSelect(conversationId);
+        setShowNotifications(false);
+      }
+    } catch {
+      toast.error('Failed to mark read');
+    }
+  };
+
+  const markAllNotificationsAsRead = async () => {
+    try {
+      await fetch('/api/notifications/mark-all-read', { method: 'POST' });
+      setNotifications(prev => prev.map(n => ({ ...n, readAt: new Date() })));
+      setUnreadNotificationsCount(0);
+    } catch {
+      toast.error('Failed to mark all read');
+    }
+  };
+
   const selectedUsers = useMemo(
     () => availableUsers.filter((user) => selectedEmails.includes(user.email)),
     [availableUsers, selectedEmails]
@@ -150,11 +220,11 @@ export default function ConversationList({
   return (
     <div className="flex flex-col h-full">
       {/* Header */}
-      <div className="px-4 pt-4 pb-3 border-b border-slate-100/60">
+      <div className="px-4 pt-4 pb-3 border-b border-[var(--app-border)]/60">
         <div className="flex items-center justify-between mb-4">
           <div className="flex items-center gap-2">
             <AppLogo size={28} />
-            <span className="font-display text-lg font-700 text-gray-900">ChatApp</span>
+            <span className="font-display text-lg font-700 text-[var(--app-text)]">ChatApp</span>
             {totalUnread > 0 && (
               <span className="bg-sky-500 text-white text-xs font-700 w-5 h-5 rounded-full flex items-center justify-center tabular-nums">
                 {totalUnread > 9 ? '9+' : totalUnread}
@@ -163,8 +233,21 @@ export default function ConversationList({
           </div>
           <div className="flex items-center gap-1">
             <button
+              onClick={() => {
+                setShowNotifications(true);
+                loadNotifications();
+              }}
+              className="relative w-8 h-8 flex items-center justify-center rounded-lg text-[var(--app-muted)] hover:bg-[var(--app-border)] hover:text-[var(--app-text)] transition-all duration-150"
+              title="Notifications"
+            >
+              <Bell size={18} />
+              {unreadNotificationsCount > 0 && (
+                <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-red-500 rounded-full"></span>
+              )}
+            </button>
+            <button
               onClick={() => setShowCreateModal(true)}
-              className="w-8 h-8 flex items-center justify-center rounded-lg text-gray-500 hover:bg-gray-100 hover:text-gray-700 transition-all duration-150"
+              className="w-8 h-8 flex items-center justify-center rounded-lg text-[var(--app-muted)] hover:bg-[var(--app-border)] hover:text-[var(--app-text)] transition-all duration-150"
               title="New conversation"
             >
               <Plus size={18} />
@@ -172,13 +255,13 @@ export default function ConversationList({
             <div className="relative" ref={actionsMenuRef}>
               <button
                 onClick={() => setShowActionsMenu((prev) => !prev)}
-                className="w-8 h-8 flex items-center justify-center rounded-lg text-gray-500 hover:bg-gray-100 hover:text-gray-700 transition-all duration-150"
+                className="w-8 h-8 flex items-center justify-center rounded-lg text-[var(--app-muted)] hover:bg-[var(--app-border)] hover:text-[var(--app-text)] transition-all duration-150"
                 title="Account menu"
               >
                 <MoreVertical size={18} />
               </button>
               {showActionsMenu && (
-                <div className="absolute right-0 top-10 w-44 rounded-xl border border-slate-100 bg-white shadow-lg z-20 p-1">
+                <div className="absolute right-0 top-10 w-44 rounded-xl border border-[var(--app-border)] bg-[var(--app-surface)] shadow-lg z-20 p-1">
                   <button
                     type="button"
                     onClick={() => {
@@ -187,10 +270,13 @@ export default function ConversationList({
                         name: currentUser?.name || '',
                         email: currentUser?.email || '',
                         bio: currentUser?.bio || '',
+                        status: currentUser?.status || 'available',
+                        statusText: currentUser?.statusText || '',
+                        avatarUrl: currentUser?.avatarUrl || '',
                       });
                       setShowProfilePanel(true);
                     }}
-                    className="w-full text-left px-3 py-2 text-sm text-slate-700 hover:bg-slate-50 rounded-lg"
+                    className="w-full text-left px-3 py-2 text-sm text-[var(--app-text)] hover:bg-[var(--app-border)] rounded-lg"
                   >
                     Profile
                   </button>
@@ -202,14 +288,22 @@ export default function ConversationList({
                         desktopNotifications: currentUser?.settings?.desktopNotifications ?? true,
                         enterToSend: currentUser?.settings?.enterToSend ?? true,
                         compactMode: currentUser?.settings?.compactMode ?? false,
+                        themeMode: currentUser?.settings?.themeMode || 'system',
+                        accentColor: currentUser?.settings?.accentColor || 'sky',
+                        chatAppearance: {
+                          bubbleStyle: currentUser?.settings?.chatAppearance?.bubbleStyle || 'rounded',
+                          density: currentUser?.settings?.chatAppearance?.density || 'comfortable',
+                          fontSize: currentUser?.settings?.chatAppearance?.fontSize || 'default',
+                          fontFamily: currentUser?.settings?.chatAppearance?.fontFamily || 'sans',
+                        }
                       });
                       setShowSettingsPanel(true);
                     }}
-                    className="w-full text-left px-3 py-2 text-sm text-slate-700 hover:bg-slate-50 rounded-lg"
+                    className="w-full text-left px-3 py-2 text-sm text-[var(--app-text)] hover:bg-[var(--app-border)] rounded-lg"
                   >
                     Settings
                   </button>
-                  <div className="h-px bg-slate-100 my-1" />
+                  <div className="h-px bg-[var(--app-bg)] my-1" />
                   <button
                     type="button"
                     onClick={() => {
@@ -234,7 +328,7 @@ export default function ConversationList({
             placeholder="Search conversations..."
             value={searchQuery}
             onChange={(e) => onSearchChange(e.target.value)}
-            className="w-full bg-slate-50 border border-slate-200/60 rounded-full pl-9 pr-4 py-2 text-sm text-slate-700 placeholder-slate-400 focus:outline-none focus:ring-4 focus:ring-sky-500/10 focus:border-sky-400 transition-all duration-200"
+            className="w-full bg-[var(--app-bg)] border border-[var(--app-border)]/60 rounded-full pl-9 pr-4 py-2 text-sm text-[var(--app-text)] placeholder-slate-400 focus:outline-none focus:ring-4 focus:ring-sky-500/10 focus:border-sky-400 transition-all duration-200"
           />
         </div>
 
@@ -253,7 +347,7 @@ export default function ConversationList({
               className={`text-[13px] font-500 px-3.5 py-1.5 rounded-full transition-all duration-200 ${
                 activeFilter === f.key
                   ? 'bg-slate-800 text-white shadow-sm'
-                  : 'bg-slate-50 text-slate-600 hover:bg-slate-100 border border-slate-200/50'
+                  : 'bg-[var(--app-bg)] text-[var(--app-muted)] hover:bg-[var(--app-border)] border border-[var(--app-border)]/50'
               }`}
             >
               {f.label}
@@ -281,10 +375,10 @@ export default function ConversationList({
           />
         ) : filtered.length === 0 ? (
           <div className="flex flex-col items-center justify-center h-48 gap-3 px-6">
-            <div className="w-12 h-12 bg-gray-100 rounded-full flex items-center justify-center">
+            <div className="w-12 h-12 bg-[var(--app-bg)] rounded-full flex items-center justify-center">
               <Search size={20} className="text-gray-400" />
             </div>
-            <p className="text-sm font-500 text-gray-500 text-center">
+            <p className="text-sm font-500 text-[var(--app-muted)] text-center">
               No conversations match your search
             </p>
           </div>
@@ -301,8 +395,8 @@ export default function ConversationList({
       </div>
 
       {/* Bottom user profile */}
-      <div className="border-t border-slate-100/60 p-4 bg-white/50 backdrop-blur-sm">
-        <div className="flex items-center gap-3 bg-slate-50/80 border border-slate-200/60 rounded-2xl p-2.5 shadow-sm">
+      <div className="border-t border-[var(--app-border)]/60 p-4 bg-[var(--app-surface)]/50 backdrop-blur-sm">
+        <div className="flex items-center gap-3 bg-slate-50/80 border border-[var(--app-border)]/60 rounded-2xl p-2.5 shadow-sm">
           <div className="relative shrink-0">
             <div className="w-9 h-9 rounded-full bg-gradient-to-tr from-sky-100 to-sky-50 flex items-center justify-center border border-sky-100">
               <span className="text-sm font-600 text-sky-700">
@@ -316,8 +410,8 @@ export default function ConversationList({
             <div className="absolute bottom-0 right-0 w-2.5 h-2.5 bg-emerald-400 border-2 border-white rounded-full shadow-sm" />
           </div>
           <div className="flex-1 min-w-0">
-            <p className="text-sm font-600 text-slate-800 truncate">{currentUser?.name || 'Guest User'}</p>
-            <p className="text-xs text-slate-500 truncate">{currentUser?.email || 'Not signed in'}</p>
+            <p className="text-sm font-600 text-[var(--app-text)] truncate">{currentUser?.name || 'Guest User'}</p>
+            <p className="text-xs text-[var(--app-muted)] truncate">{currentUser?.email || 'Not signed in'}</p>
           </div>
           <Link
             href="/landingPage"
@@ -330,12 +424,12 @@ export default function ConversationList({
 
       {showCreateModal && (
         <div className="absolute inset-0 z-40 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="w-full max-w-lg rounded-2xl border border-slate-200 bg-white shadow-2xl">
-            <div className="px-5 py-4 border-b border-slate-100 flex items-center justify-between">
-              <p className="text-base font-700 text-slate-900">Start new conversation</p>
+          <div className="w-full max-w-lg rounded-2xl border border-[var(--app-border)] bg-[var(--app-surface)] shadow-2xl">
+            <div className="px-5 py-4 border-b border-[var(--app-border)] flex items-center justify-between">
+              <p className="text-base font-700 text-[var(--app-text)]">Start new conversation</p>
               <button
                 onClick={resetCreateState}
-                className="w-8 h-8 rounded-lg flex items-center justify-center text-slate-500 hover:bg-slate-100"
+                className="w-8 h-8 rounded-lg flex items-center justify-center text-[var(--app-muted)] hover:bg-[var(--app-border)]"
               >
                 <X size={16} />
               </button>
@@ -343,7 +437,7 @@ export default function ConversationList({
 
             <div className="px-5 py-4 space-y-4">
               <div>
-                <label className="text-xs font-600 uppercase tracking-wide text-slate-500">Conversation type</label>
+                <label className="text-xs font-600 uppercase tracking-wide text-[var(--app-muted)]">Conversation type</label>
                 <div className="mt-1 grid grid-cols-2 gap-2">
                   <button
                     type="button"
@@ -351,7 +445,7 @@ export default function ConversationList({
                     className={`rounded-xl border px-3 py-2 text-sm font-600 transition-colors ${
                       createMode === 'direct'
                         ? 'border-sky-500 bg-sky-50 text-sky-700'
-                        : 'border-slate-200 text-slate-600 hover:bg-slate-50'
+                        : 'border-[var(--app-border)] text-[var(--app-muted)] hover:bg-[var(--app-border)]'
                     }`}
                   >
                     Direct
@@ -362,7 +456,7 @@ export default function ConversationList({
                     className={`rounded-xl border px-3 py-2 text-sm font-600 transition-colors ${
                       createMode === 'group'
                         ? 'border-sky-500 bg-sky-50 text-sky-700'
-                        : 'border-slate-200 text-slate-600 hover:bg-slate-50'
+                        : 'border-[var(--app-border)] text-[var(--app-muted)] hover:bg-[var(--app-border)]'
                     }`}
                   >
                     Group
@@ -371,30 +465,30 @@ export default function ConversationList({
               </div>
 
               <div>
-                <label className="text-xs font-600 uppercase tracking-wide text-slate-500">Search users</label>
+                <label className="text-xs font-600 uppercase tracking-wide text-[var(--app-muted)]">Search users</label>
                 <input
                   value={userSearch}
                   onChange={(e) => setUserSearch(e.target.value)}
                   placeholder="Search by name or email"
-                  className="mt-1 w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-sky-400/40"
+                  className="mt-1 w-full border border-[var(--app-border)] rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-sky-400/40"
                 />
               </div>
 
               {createMode === 'group' && (
                 <div>
-                  <label className="text-xs font-600 uppercase tracking-wide text-slate-500">Group name</label>
+                  <label className="text-xs font-600 uppercase tracking-wide text-[var(--app-muted)]">Group name</label>
                   <input
                     value={groupName}
                     onChange={(e) => setGroupName(e.target.value)}
                     placeholder="Enter group name"
-                    className="mt-1 w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-sky-400/40"
+                    className="mt-1 w-full border border-[var(--app-border)] rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-sky-400/40"
                   />
                 </div>
               )}
 
-              <div className="max-h-64 overflow-y-auto border border-slate-100 rounded-xl">
+              <div className="max-h-64 overflow-y-auto border border-[var(--app-border)] rounded-xl">
                 {availableUsers.length === 0 ? (
-                  <p className="px-4 py-8 text-center text-sm text-slate-500">No users found</p>
+                  <p className="px-4 py-8 text-center text-sm text-[var(--app-muted)]">No users found</p>
                 ) : (
                   availableUsers.map((user) => {
                     const selected = selectedEmails.includes(user.email);
@@ -412,11 +506,11 @@ export default function ConversationList({
 
                           toggleUserSelection(user.email);
                         }}
-                        className={`w-full px-4 py-3 text-left flex items-center gap-3 border-b border-slate-100 last:border-b-0 ${
-                          selected ? 'bg-sky-50' : 'hover:bg-slate-50'
+                        className={`w-full px-4 py-3 text-left flex items-center gap-3 border-b border-[var(--app-border)] last:border-b-0 ${
+                          selected ? 'bg-sky-50' : 'hover:bg-[var(--app-border)]'
                         }`}
                       >
-                        <div className="w-9 h-9 rounded-full overflow-hidden bg-slate-100">
+                        <div className="w-9 h-9 rounded-full overflow-hidden bg-[var(--app-bg)]">
                           <AppImage
                             src={user.avatarUrl || `https://i.pravatar.cc/48?u=${encodeURIComponent(user.email)}`}
                             alt={`${user.name} avatar`}
@@ -426,8 +520,8 @@ export default function ConversationList({
                           />
                         </div>
                         <div className="flex-1 min-w-0">
-                          <p className="text-sm font-600 text-slate-900 truncate">{user.name}</p>
-                          <p className="text-xs text-slate-500 truncate">{user.email}</p>
+                          <p className="text-sm font-600 text-[var(--app-text)] truncate">{user.name}</p>
+                          <p className="text-xs text-[var(--app-muted)] truncate">{user.email}</p>
                         </div>
                         <span className={`text-xs font-600 ${selected ? 'text-sky-600' : 'text-slate-400'}`}>
                           {selected ? 'Selected' : 'Select'}
@@ -440,7 +534,7 @@ export default function ConversationList({
 
               {selectedUsers.length > 0 && (
                 <div>
-                  <p className="text-xs font-600 uppercase tracking-wide text-slate-500 mb-2">Participants</p>
+                  <p className="text-xs font-600 uppercase tracking-wide text-[var(--app-muted)] mb-2">Participants</p>
                   <div className="flex flex-wrap gap-2">
                     {selectedUsers.map((user) => (
                       <span key={user.id} className="text-xs px-2.5 py-1 rounded-full bg-sky-100 text-sky-700">
@@ -452,11 +546,11 @@ export default function ConversationList({
               )}
             </div>
 
-            <div className="px-5 py-4 border-t border-slate-100 flex items-center justify-end gap-2">
+            <div className="px-5 py-4 border-t border-[var(--app-border)] flex items-center justify-end gap-2">
               <button
                 type="button"
                 onClick={resetCreateState}
-                className="px-4 py-2 rounded-lg text-sm text-slate-600 hover:bg-slate-100"
+                className="px-4 py-2 rounded-lg text-sm text-[var(--app-muted)] hover:bg-[var(--app-border)]"
                 disabled={isCreating}
               >
                 Cancel
@@ -476,13 +570,13 @@ export default function ConversationList({
 
       {showProfilePanel && (
         <div className="absolute inset-0 z-50 bg-slate-900/35 backdrop-blur-sm flex items-center justify-end">
-          <div className="h-full w-full max-w-sm bg-white border-l border-slate-100 shadow-2xl flex flex-col">
-            <div className="px-5 py-4 border-b border-slate-100 flex items-center justify-between">
-              <p className="text-base font-700 text-slate-900">Profile</p>
+          <div className="h-full w-full max-w-sm bg-[var(--app-surface)] border-l border-[var(--app-border)] shadow-2xl flex flex-col">
+            <div className="px-5 py-4 border-b border-[var(--app-border)] flex items-center justify-between">
+              <p className="text-base font-700 text-[var(--app-text)]">Profile</p>
               <button
                 type="button"
                 onClick={() => setShowProfilePanel(false)}
-                className="w-8 h-8 rounded-lg flex items-center justify-center text-slate-500 hover:bg-slate-100"
+                className="w-8 h-8 rounded-lg flex items-center justify-center text-[var(--app-muted)] hover:bg-[var(--app-border)]"
               >
                 <X size={16} />
               </button>
@@ -490,21 +584,45 @@ export default function ConversationList({
 
             <div className="p-5 space-y-4">
               <div className="flex items-center gap-3">
-                <div className="w-14 h-14 rounded-full bg-sky-100 flex items-center justify-center text-sky-700 font-700">
-                  {(profileDraft.name || 'U')
-                    .split(' ')
-                    .map((part) => part.charAt(0).toUpperCase())
-                    .slice(0, 2)
-                    .join('')}
-                </div>
+                <label className="relative cursor-pointer group">
+                  <div className="w-14 h-14 rounded-full overflow-hidden bg-sky-100 flex items-center justify-center text-sky-700 font-700 border-2 border-transparent group-hover:border-sky-300 transition-colors">
+                    {profileDraft.avatarUrl ? (
+                      <AppImage src={profileDraft.avatarUrl} alt="Avatar" width={56} height={56} className="w-full h-full object-cover" />
+                    ) : (
+                      (profileDraft.name || 'U').split(' ').map((part) => part.charAt(0).toUpperCase()).slice(0, 2).join('')
+                    )}
+                  </div>
+                  <div className="absolute inset-0 bg-black/40 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                    <span className="text-[10px] text-white font-medium">Edit</span>
+                  </div>
+                  <input
+                    type="file"
+                    accept="image/*"
+                    className="hidden"
+                    onChange={async (e) => {
+                      const file = e.target.files?.[0];
+                      if (!file) return;
+                      const formData = new FormData();
+                      formData.append('file', file);
+                      try {
+                        const res = await fetch('/api/uploads', { method: 'POST', body: formData });
+                        if (!res.ok) throw new Error();
+                        const data = await res.json();
+                        setProfileDraft(prev => ({ ...prev, avatarUrl: data.url }));
+                      } catch {
+                        toast.error('Avatar upload failed');
+                      }
+                    }}
+                  />
+                </label>
                 <div>
-                  <p className="text-sm font-700 text-slate-900">{profileDraft.name || 'Unnamed User'}</p>
-                  <p className="text-xs text-slate-500">{profileDraft.email || 'No email'}</p>
+                  <p className="text-sm font-700 text-[var(--app-text)]">{profileDraft.name || 'Unnamed User'}</p>
+                  <p className="text-xs text-[var(--app-muted)]">{profileDraft.email || 'No email'}</p>
                 </div>
               </div>
 
               <div>
-                <label className="text-xs font-600 uppercase tracking-wide text-slate-500">Display name</label>
+                <label className="text-xs font-600 uppercase tracking-wide text-[var(--app-muted)]">Display name</label>
                 <input
                   value={profileDraft.name}
                   onChange={(e) =>
@@ -513,13 +631,38 @@ export default function ConversationList({
                       name: e.target.value,
                     }))
                   }
-                  className="mt-1 w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-sky-400/40"
+                  className="mt-1 w-full border border-[var(--app-border)] rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-sky-400/40"
                   placeholder="Your name"
                 />
               </div>
 
               <div>
-                <label className="text-xs font-600 uppercase tracking-wide text-slate-500">Email</label>
+                <label className="text-xs font-600 uppercase tracking-wide text-[var(--app-muted)]">Status</label>
+                <select
+                  value={profileDraft.status || 'available'}
+                  onChange={(e) => setProfileDraft(prev => ({ ...prev, status: e.target.value }))}
+                  className="mt-1 w-full border border-[var(--app-border)] rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-sky-400/40 bg-[var(--app-surface)]"
+                >
+                  <option value="available">Available</option>
+                  <option value="busy">Busy</option>
+                  <option value="away">Away</option>
+                  <option value="offline">Offline</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="text-xs font-600 uppercase tracking-wide text-[var(--app-muted)]">Status Text</label>
+                <input
+                  value={profileDraft.statusText || ''}
+                  onChange={(e) => setProfileDraft(prev => ({ ...prev, statusText: e.target.value }))}
+                  maxLength={80}
+                  className="mt-1 w-full border border-[var(--app-border)] rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-sky-400/40"
+                  placeholder="What's on your mind?"
+                />
+              </div>
+
+              <div>
+                <label className="text-xs font-600 uppercase tracking-wide text-[var(--app-muted)]">Email</label>
                 <input
                   value={profileDraft.email}
                   onChange={(e) =>
@@ -528,13 +671,13 @@ export default function ConversationList({
                       email: e.target.value,
                     }))
                   }
-                  className="mt-1 w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-sky-400/40"
+                  className="mt-1 w-full border border-[var(--app-border)] rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-sky-400/40"
                   placeholder="you@example.com"
                 />
               </div>
 
               <div>
-                <label className="text-xs font-600 uppercase tracking-wide text-slate-500">Bio</label>
+                <label className="text-xs font-600 uppercase tracking-wide text-[var(--app-muted)]">Bio</label>
                 <textarea
                   value={profileDraft.bio || ''}
                   onChange={(e) =>
@@ -545,7 +688,7 @@ export default function ConversationList({
                   }
                   rows={3}
                   maxLength={160}
-                  className="mt-1 w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-sky-400/40 resize-none"
+                  className="mt-1 w-full border border-[var(--app-border)] rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-sky-400/40 resize-none"
                   placeholder="Tell people a bit about yourself"
                 />
                 <p className="mt-1 text-[11px] text-slate-400 text-right">
@@ -553,12 +696,12 @@ export default function ConversationList({
                 </p>
               </div>
 
-              <p className="text-xs text-slate-500">
+              <p className="text-xs text-[var(--app-muted)]">
                 Profile updates sync with your account.
               </p>
             </div>
 
-            <div className="mt-auto px-5 py-4 border-t border-slate-100 flex justify-end gap-2">
+            <div className="mt-auto px-5 py-4 border-t border-[var(--app-border)] flex justify-end gap-2">
               <button
                 type="button"
                 onClick={() => {
@@ -566,9 +709,12 @@ export default function ConversationList({
                     name: currentUser?.name || '',
                     email: currentUser?.email || '',
                     bio: currentUser?.bio || '',
+                    status: currentUser?.status || 'available',
+                    statusText: currentUser?.statusText || '',
+                    avatarUrl: currentUser?.avatarUrl || '',
                   });
                 }}
-                className="px-4 py-2 rounded-lg text-sm text-slate-600 hover:bg-slate-100"
+                className="px-4 py-2 rounded-lg text-sm text-[var(--app-muted)] hover:bg-[var(--app-border)]"
               >
                 Reset
               </button>
@@ -585,6 +731,9 @@ export default function ConversationList({
                         name: profileDraft.name,
                         email: profileDraft.email,
                         bio: profileDraft.bio || '',
+                        status: profileDraft.status || 'available',
+                        statusText: profileDraft.statusText || '',
+                        avatarUrl: profileDraft.avatarUrl || '',
                       }),
                     });
 
@@ -613,23 +762,23 @@ export default function ConversationList({
 
       {showSettingsPanel && (
         <div className="absolute inset-0 z-50 bg-slate-900/35 backdrop-blur-sm flex items-center justify-end">
-          <div className="h-full w-full max-w-sm bg-white border-l border-slate-100 shadow-2xl flex flex-col">
-            <div className="px-5 py-4 border-b border-slate-100 flex items-center justify-between">
-              <p className="text-base font-700 text-slate-900">Settings</p>
+          <div className="h-full w-full max-w-sm bg-[var(--app-surface)] border-l border-[var(--app-border)] shadow-2xl flex flex-col">
+            <div className="px-5 py-4 border-b border-[var(--app-border)] flex items-center justify-between">
+              <p className="text-base font-700 text-[var(--app-text)]">Settings</p>
               <button
                 type="button"
                 onClick={() => setShowSettingsPanel(false)}
-                className="w-8 h-8 rounded-lg flex items-center justify-center text-slate-500 hover:bg-slate-100"
+                className="w-8 h-8 rounded-lg flex items-center justify-center text-[var(--app-muted)] hover:bg-[var(--app-border)]"
               >
                 <X size={16} />
               </button>
             </div>
 
             <div className="p-5 space-y-4">
-              <label className="flex items-center justify-between gap-3 p-3 rounded-xl border border-slate-100">
+              <label className="flex items-center justify-between gap-3 p-3 rounded-xl border border-[var(--app-border)]">
                 <div>
-                  <p className="text-sm font-600 text-slate-800">Desktop notifications</p>
-                  <p className="text-xs text-slate-500">Get notified for incoming messages</p>
+                  <p className="text-sm font-600 text-[var(--app-text)]">Desktop notifications</p>
+                  <p className="text-xs text-[var(--app-muted)]">Get notified for incoming messages</p>
                 </div>
                 <input
                   type="checkbox"
@@ -640,14 +789,14 @@ export default function ConversationList({
                       desktopNotifications: e.target.checked,
                     }))
                   }
-                  className="w-4 h-4 rounded border-slate-300 text-sky-500"
+                  className="w-4 h-4 rounded border-[var(--app-border)] text-sky-500"
                 />
               </label>
 
-              <label className="flex items-center justify-between gap-3 p-3 rounded-xl border border-slate-100">
+              <label className="flex items-center justify-between gap-3 p-3 rounded-xl border border-[var(--app-border)]">
                 <div>
-                  <p className="text-sm font-600 text-slate-800">Enter to send</p>
-                  <p className="text-xs text-slate-500">Press Enter to send messages</p>
+                  <p className="text-sm font-600 text-[var(--app-text)]">Enter to send</p>
+                  <p className="text-xs text-[var(--app-muted)]">Press Enter to send messages</p>
                 </div>
                 <input
                   type="checkbox"
@@ -658,14 +807,14 @@ export default function ConversationList({
                       enterToSend: e.target.checked,
                     }))
                   }
-                  className="w-4 h-4 rounded border-slate-300 text-sky-500"
+                  className="w-4 h-4 rounded border-[var(--app-border)] text-sky-500"
                 />
               </label>
 
-              <label className="flex items-center justify-between gap-3 p-3 rounded-xl border border-slate-100">
+              <label className="flex items-center justify-between gap-3 p-3 rounded-xl border border-[var(--app-border)]">
                 <div>
-                  <p className="text-sm font-600 text-slate-800">Compact mode</p>
-                  <p className="text-xs text-slate-500">Use denser spacing in chat list</p>
+                  <p className="text-sm font-600 text-[var(--app-text)]">Compact mode</p>
+                  <p className="text-xs text-[var(--app-muted)]">Use denser spacing in chat list</p>
                 </div>
                 <input
                   type="checkbox"
@@ -676,16 +825,92 @@ export default function ConversationList({
                       compactMode: e.target.checked,
                     }))
                   }
-                  className="w-4 h-4 rounded border-slate-300 text-sky-500"
+                  className="w-4 h-4 rounded border-[var(--app-border)] text-sky-500"
                 />
               </label>
 
-              <p className="text-xs text-slate-500">
+              <div className="pt-2 border-t border-[var(--app-border)]">
+                <p className="text-sm font-600 text-[var(--app-text)] mb-3">Appearance</p>
+                
+                <div className="space-y-3">
+                  <div>
+                    <label className="text-xs text-[var(--app-muted)] block mb-1">Theme</label>
+                    <div className="flex gap-2">
+                      {['system', 'light', 'dark'].map(t => (
+                        <button
+                          key={`theme-${t}`}
+                          onClick={() => setSettingsDraft(prev => ({ ...prev, themeMode: t }))}
+                          className={`flex-1 py-1.5 text-xs font-500 rounded-lg capitalize border ${settingsDraft.themeMode === t ? 'border-sky-500 bg-sky-50 text-sky-700' : 'border-[var(--app-border)] text-[var(--app-muted)] hover:bg-[var(--app-border)]'}`}
+                        >
+                          {t}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="text-xs text-[var(--app-muted)] block mb-1">Accent Color</label>
+                    <div className="flex gap-2">
+                      {['sky', 'emerald', 'rose', 'slate'].map(color => (
+                        <button
+                          key={`accent-${color}`}
+                          onClick={() => setSettingsDraft(prev => ({ ...prev, accentColor: color }))}
+                          className={`w-8 h-8 rounded-full flex items-center justify-center border-2 transition-transform ${settingsDraft.accentColor === color ? 'border-slate-800 scale-110' : 'border-transparent'}`}
+                          style={{
+                            backgroundColor: color === 'sky' ? '#0ea5e9' : color === 'emerald' ? '#10b981' : color === 'rose' ? '#f43f5e' : '#64748b'
+                          }}
+                        />
+                      ))}
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="text-xs text-[var(--app-muted)] block mb-1">Bubble Style</label>
+                    <select
+                      value={settingsDraft.chatAppearance?.bubbleStyle || 'rounded'}
+                      onChange={(e) => setSettingsDraft(prev => ({ ...prev, chatAppearance: { ...prev.chatAppearance, bubbleStyle: e.target.value } }))}
+                      className="w-full border border-[var(--app-border)] rounded-lg px-2 py-1.5 text-sm bg-[var(--app-surface)]"
+                    >
+                      <option value="rounded">Rounded</option>
+                      <option value="compact">Compact</option>
+                      <option value="minimal">Minimal</option>
+                    </select>
+                  </div>
+                  
+                  <div className="flex gap-2">
+                    <div className="flex-1">
+                      <label className="text-xs text-[var(--app-muted)] block mb-1">Density</label>
+                      <select
+                        value={settingsDraft.chatAppearance?.density || 'comfortable'}
+                        onChange={(e) => setSettingsDraft(prev => ({ ...prev, chatAppearance: { ...prev.chatAppearance, density: e.target.value } }))}
+                        className="w-full border border-[var(--app-border)] rounded-lg px-2 py-1.5 text-sm bg-[var(--app-surface)]"
+                      >
+                        <option value="comfortable">Comfortable</option>
+                        <option value="compact">Compact</option>
+                      </select>
+                    </div>
+                    <div className="flex-1">
+                      <label className="text-xs text-[var(--app-muted)] block mb-1">Font Size</label>
+                      <select
+                        value={settingsDraft.chatAppearance?.fontSize || 'default'}
+                        onChange={(e) => setSettingsDraft(prev => ({ ...prev, chatAppearance: { ...prev.chatAppearance, fontSize: e.target.value } }))}
+                        className="w-full border border-[var(--app-border)] rounded-lg px-2 py-1.5 text-sm bg-[var(--app-surface)]"
+                      >
+                        <option value="small">Small</option>
+                        <option value="default">Default</option>
+                        <option value="large">Large</option>
+                      </select>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <p className="text-xs text-[var(--app-muted)] pt-2">
                 Settings are saved to your account.
               </p>
             </div>
 
-            <div className="mt-auto px-5 py-4 border-t border-slate-100 flex justify-end gap-2">
+            <div className="mt-auto px-5 py-4 border-t border-[var(--app-border)] flex justify-end gap-2">
               <button
                 type="button"
                 onClick={() => {
@@ -695,7 +920,7 @@ export default function ConversationList({
                     compactMode: currentUser?.settings?.compactMode ?? false,
                   });
                 }}
-                className="px-4 py-2 rounded-lg text-sm text-slate-600 hover:bg-slate-100"
+                className="px-4 py-2 rounded-lg text-sm text-[var(--app-muted)] hover:bg-[var(--app-border)]"
               >
                 Reset
               </button>
@@ -735,6 +960,64 @@ export default function ConversationList({
           </div>
         </div>
       )}
+
+      {showNotifications && (
+        <div className="absolute inset-0 z-50 bg-slate-900/35 backdrop-blur-sm flex items-center justify-end">
+          <div className="h-full w-full max-w-sm bg-[var(--app-surface)] border-l border-[var(--app-border)] shadow-2xl flex flex-col">
+            <div className="px-5 py-4 border-b border-[var(--app-border)] flex items-center justify-between">
+              <p className="text-base font-700 text-[var(--app-text)] flex items-center gap-2">
+                <Bell size={18} /> Notifications
+              </p>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={markAllNotificationsAsRead}
+                  className="text-xs text-sky-600 font-500 hover:text-sky-700"
+                >
+                  Mark all read
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setShowNotifications(false)}
+                  className="w-8 h-8 rounded-lg flex items-center justify-center text-[var(--app-muted)] hover:bg-[var(--app-border)]"
+                >
+                  <X size={16} />
+                </button>
+              </div>
+            </div>
+
+            <div className="flex-1 overflow-y-auto p-4 space-y-3 chat-scrollbar">
+              {isLoadingNotifications ? (
+                <div className="text-center py-4 text-xs text-gray-400">Loading...</div>
+              ) : notifications.length === 0 ? (
+                <div className="text-center py-8 text-sm text-[var(--app-muted)] flex flex-col items-center gap-2">
+                  <BellOff size={24} className="text-gray-300" />
+                  No notifications yet
+                </div>
+              ) : (
+                notifications.map((notif) => (
+                  <div
+                    key={notif._id}
+                    onClick={() => markNotificationAsRead(notif._id, notif.conversationId)}
+                    className={`p-3 rounded-xl border transition-colors cursor-pointer ${
+                      notif.readAt ? 'bg-[var(--app-bg)] border-[var(--app-border)] opacity-75' : 'bg-[var(--app-surface)] border-sky-100 shadow-sm'
+                    }`}
+                  >
+                    <div className="flex items-start justify-between gap-2 mb-1">
+                      <p className={`text-sm ${notif.readAt ? 'font-500 text-[var(--app-text)]' : 'font-600 text-[var(--app-text)]'}`}>
+                        {notif.title}
+                      </p>
+                      {!notif.readAt && <span className="w-2 h-2 rounded-full bg-sky-500 shrink-0 mt-1.5" />}
+                    </div>
+                    {notif.body && <p className="text-xs text-[var(--app-muted)] mb-2">{notif.body}</p>}
+                    <p className="text-[10px] text-slate-400">{new Date(notif.createdAt).toLocaleString()}</p>
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -747,13 +1030,13 @@ function ConversationItem({
   return (
     <button
       onClick={() => onSelect(c.id)}
-      className={`w-full flex items-center gap-3 px-4 py-3 transition-all duration-200 text-left group relative border-b border-slate-100/40 last:border-b-0 ${
-        isActive ? 'bg-sky-50/50 before:absolute before:left-0 before:top-0 before:bottom-0 before:w-1 before:bg-sky-500 before:rounded-r-md' : 'hover:bg-slate-50'
+      className={`w-full flex items-center gap-3 px-4 py-3 transition-all duration-200 text-left group relative border-b border-[var(--app-border)]/40 last:border-b-0 ${
+        isActive ? 'bg-sky-50/50 before:absolute before:left-0 before:top-0 before:bottom-0 before:w-1 before:bg-sky-500 before:rounded-r-md' : 'hover:bg-[var(--app-border)]'
       }`}
     >
       {/* Avatar */}
       <div className="relative shrink-0">
-        <div className="w-11 h-11 rounded-full overflow-hidden bg-gray-100">
+        <div className="w-11 h-11 rounded-full overflow-hidden bg-[var(--app-bg)]">
           <AppImage
             src={c.avatar}
             alt={c.avatarAlt}
@@ -778,7 +1061,7 @@ function ConversationItem({
       <div className="flex-1 min-w-0">
         <div className="flex items-center justify-between gap-1 mb-1">
           <div className="flex items-center gap-1.5 min-w-0">
-            <span className={`text-sm truncate ${c.unreadCount > 0 ? 'font-600 text-slate-900' : 'font-500 text-slate-700'}`}>
+            <span className={`text-sm truncate ${c.unreadCount > 0 ? 'font-600 text-[var(--app-text)]' : 'font-500 text-[var(--app-text)]'}`}>
               {c.name}
             </span>
             {c.isMuted && <BellOff size={12} className="text-slate-400 shrink-0" />}
@@ -789,7 +1072,7 @@ function ConversationItem({
           </span>
         </div>
         <div className="flex items-center justify-between gap-2">
-          <p className={`text-[13px] truncate leading-tight ${c.unreadCount > 0 ? 'text-slate-800 font-500' : 'text-slate-500'}`}>
+          <p className={`text-[13px] truncate leading-tight ${c.unreadCount > 0 ? 'text-[var(--app-text)] font-500' : 'text-[var(--app-muted)]'}`}>
             {c.lastMessage}
           </p>
           {c.unreadCount > 0 && (
@@ -849,7 +1132,7 @@ function CallHistoryView({ conversations, onSelect, onStartCall }) {
     return (
       <div className="flex flex-col items-center justify-center p-8 gap-3">
         <div className="w-6 h-6 border-2 border-sky-200 border-t-sky-500 rounded-full animate-spin" />
-        <p className="text-sm text-gray-500">Loading call history...</p>
+        <p className="text-sm text-[var(--app-muted)]">Loading call history...</p>
       </div>
     );
   }
@@ -857,10 +1140,10 @@ function CallHistoryView({ conversations, onSelect, onStartCall }) {
   if (calls.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center h-48 gap-3 px-6">
-        <div className="w-12 h-12 bg-gray-100 rounded-full flex items-center justify-center">
+        <div className="w-12 h-12 bg-[var(--app-bg)] rounded-full flex items-center justify-center">
           <PhoneCall size={20} className="text-gray-400" />
         </div>
-        <p className="text-sm font-500 text-gray-500 text-center">
+        <p className="text-sm font-500 text-[var(--app-muted)] text-center">
           No calls made yet
         </p>
         <p className="text-xs text-gray-400 text-center mt-1">
@@ -879,18 +1162,18 @@ function CallHistoryView({ conversations, onSelect, onStartCall }) {
         const callIconClass = isMissed ? 'text-red-500' : (isIncoming ? 'text-blue-500' : 'text-emerald-500');
 
         return (
-          <div key={call.id} className="w-full flex justify-between px-4 py-3 hover:bg-gray-50 border-b border-gray-50 last:border-b-0 cursor-pointer group" onClick={() => onSelect(call.conversationId)}>
+          <div key={call.id} className="w-full flex justify-between px-4 py-3 hover:bg-[var(--app-border)] border-b border-gray-50 last:border-b-0 cursor-pointer group" onClick={() => onSelect(call.conversationId)}>
             <div className="flex items-center gap-3 min-w-0">
               <div className="relative shrink-0">
-                <div className="w-11 h-11 rounded-full overflow-hidden bg-gray-100 border border-gray-200">
+                <div className="w-11 h-11 rounded-full overflow-hidden bg-[var(--app-bg)] border border-[var(--app-border)]">
                   <AppImage src={call.convAvatar || `https://i.pravatar.cc/48?u=${encodeURIComponent(call.convName || call.conversationId)}`} alt={call.convName} width={44} height={44} className="w-full h-full object-cover" />
                 </div>
               </div>
               <div className="flex flex-col min-w-0">
-                <span className={`text-sm font-semibold truncate ${isMissed ? 'text-red-500' : 'text-gray-800'}`}>
+                <span className={`text-sm font-semibold truncate ${isMissed ? 'text-red-500' : 'text-[var(--app-text)]'}`}>
                   {call.convName}
                 </span>
-                <div className="flex items-center gap-1.5 text-xs text-gray-500">
+                <div className="flex items-center gap-1.5 text-xs text-[var(--app-muted)]">
                   {call.type === 'video' ? (
                     <Video size={12} className={callIconClass} />
                   ) : (
@@ -909,7 +1192,7 @@ function CallHistoryView({ conversations, onSelect, onStartCall }) {
               </span>
               <div className="flex items-center gap-2 mt-1 opacity-0 group-hover:opacity-100 transition-opacity">
                 <button 
-                  className="p-1.5 bg-gray-100 hover:bg-sky-100 hover:text-sky-600 rounded-full text-gray-500 transition-colors"
+                  className="p-1.5 bg-[var(--app-bg)] hover:bg-sky-100 hover:text-sky-600 rounded-full text-[var(--app-muted)] transition-colors"
                   onClick={(e) => {
                     e.stopPropagation();
                     if(onStartCall) onStartCall(call.conversationId, 'audio');
@@ -919,7 +1202,7 @@ function CallHistoryView({ conversations, onSelect, onStartCall }) {
                   <Phone size={14} />
                 </button>
                 <button 
-                  className="p-1.5 bg-gray-100 hover:bg-sky-100 hover:text-sky-600 rounded-full text-gray-500 transition-colors"
+                  className="p-1.5 bg-[var(--app-bg)] hover:bg-sky-100 hover:text-sky-600 rounded-full text-[var(--app-muted)] transition-colors"
                   onClick={(e) => {
                     e.stopPropagation();
                     if(onStartCall) onStartCall(call.conversationId, 'video');

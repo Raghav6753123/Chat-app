@@ -68,6 +68,7 @@ async function buildConversationSummaryForUser(userId, conversationId) {
     isMuted: Boolean(membership.isMuted),
     isPinned: Boolean(membership.isPinned),
     isArchived: Boolean(membership.isArchived),
+    wallpaper: membership.wallpaper || '',
     members: conversation.memberCount || members.length,
     memberRole: role,
     canManageGroup: Boolean(
@@ -135,6 +136,8 @@ export async function GET(request, context) {
         isOnline: Boolean(user?.isOnline),
         isMuted: Boolean(member.isMuted),
         isPinned: Boolean(member.isPinned),
+        isArchived: Boolean(member.isArchived),
+        wallpaper: member.wallpaper || '',
         unreadCount: member.unreadCount || 0,
         joinedAt: member.joinedAt,
       };
@@ -410,6 +413,10 @@ export async function PATCH(request, context) {
     updates.archivedAt = body.isArchived ? new Date() : null;
   }
 
+  if (typeof body.wallpaper === 'string') {
+    updates.wallpaper = body.wallpaper;
+  }
+
   if (!Object.keys(updates).length) {
     return NextResponse.json({ error: 'No valid preference updates provided' }, { status: 400 });
   }
@@ -425,6 +432,7 @@ export async function PATCH(request, context) {
       isMuted: Boolean(updated.isMuted),
       isPinned: Boolean(updated.isPinned),
       isArchived: Boolean(updated.isArchived),
+      wallpaper: updated.wallpaper || '',
     },
   });
 }

@@ -56,6 +56,8 @@ export default function ContactInfoPanel({
   const [isAddingMembers, setIsAddingMembers] = useState(false);
   const [groupNameDraft, setGroupNameDraft] = useState(conversation.name || '');
   const [isSavingGroupName, setIsSavingGroupName] = useState(false);
+  const [wallpaperDraft, setWallpaperDraft] = useState(conversation.wallpaper || 'clean');
+  const [isUploadingWallpaper, setIsUploadingWallpaper] = useState(false);
 
   const canManageGroup = Boolean(conversation.isGroup && conversation.canManageGroup);
 
@@ -85,6 +87,7 @@ export default function ContactInfoPanel({
     setIsPinned(conversation.isPinned);
     setIsArchived(conversation.isArchived);
     setGroupNameDraft(conversation.name || '');
+    setWallpaperDraft(conversation.wallpaper || 'clean');
   }, [conversation]);
 
   const loadShared = useCallback(async ({ skip = 0, append = false } = {}) => {
@@ -230,6 +233,32 @@ export default function ContactInfoPanel({
     } catch (error) {
       setIsArchived(!next);
       toast.error(error.message || 'Unable to update archive preference');
+    }
+  };
+
+  const handleWallpaperChange = async (type, file = null) => {
+    try {
+      let finalWallpaper = type;
+      if (type === 'custom' && file) {
+        setIsUploadingWallpaper(true);
+        const formData = new FormData();
+        formData.append('file', file);
+        const res = await fetch('/api/uploads', {
+          method: 'POST',
+          body: formData,
+        });
+        if (!res.ok) throw new Error('Upload failed');
+        const data = await res.json();
+        finalWallpaper = data.url;
+      }
+      
+      await updatePreferences({ wallpaper: finalWallpaper });
+      setWallpaperDraft(finalWallpaper);
+      toast.success('Wallpaper updated');
+    } catch (error) {
+      toast.error('Failed to update wallpaper');
+    } finally {
+      setIsUploadingWallpaper(false);
     }
   };
 
@@ -387,21 +416,21 @@ export default function ContactInfoPanel({
 
   return (
     <div className="flex flex-col h-full overflow-y-auto chat-scrollbar">
-      <div className="px-5 py-4 border-b border-slate-100/60 flex items-center justify-between shrink-0">
-        <p className="text-[15px] font-600 text-slate-800">
+      <div className="px-5 py-4 border-b border-[var(--app-border)]/60 flex items-center justify-between shrink-0">
+        <p className="text-[15px] font-600 text-[var(--app-text)]">
           {conversation.isGroup ? 'Group info' : 'Contact info'}
         </p>
         <button
           onClick={onClose}
-          className="w-8 h-8 flex items-center justify-center rounded-lg text-gray-400 hover:bg-gray-100 hover:text-gray-600 transition-all duration-150"
+          className="w-8 h-8 flex items-center justify-center rounded-lg text-gray-400 hover:bg-[var(--app-border)] hover:text-[var(--app-muted)] transition-all duration-150"
         >
           <X size={16} />
         </button>
       </div>
 
-      <div className="flex flex-col items-center gap-4 px-6 py-8 border-b border-slate-100/60 bg-slate-50/30">
+      <div className="flex flex-col items-center gap-4 px-6 py-8 border-b border-[var(--app-border)]/60 bg-slate-50/30">
         <div className="relative">
-          <div className="w-24 h-24 rounded-full overflow-hidden bg-slate-100 ring-4 ring-white shadow-md shadow-slate-200/50">
+          <div className="w-24 h-24 rounded-full overflow-hidden bg-[var(--app-bg)] ring-4 ring-white shadow-md shadow-slate-200/50">
             <AppImage
               src={conversation.avatar}
               alt={conversation.avatarAlt}
@@ -421,7 +450,7 @@ export default function ContactInfoPanel({
               <input
                 value={groupNameDraft}
                 onChange={(e) => setGroupNameDraft(e.target.value)}
-                className="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-400/40"
+                className="w-full border border-[var(--app-border)] rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-400/40"
                 placeholder="Group name"
               />
               <button
@@ -435,7 +464,7 @@ export default function ContactInfoPanel({
               </button>
             </div>
           ) : (
-            <p className="text-base font-700 text-gray-900">{conversation.name}</p>
+            <p className="text-base font-700 text-[var(--app-text)]">{conversation.name}</p>
           )}
 
           {conversation.isGroup ? (
@@ -452,38 +481,38 @@ export default function ContactInfoPanel({
             onClick={() => onStartCall?.(conversation.id, 'voice')}
             className="flex flex-col items-center gap-1.5 group flex-1"
           >
-            <div className="w-12 h-12 bg-white border border-slate-200/60 hover:bg-slate-50 hover:border-slate-300 rounded-2xl flex items-center justify-center transition-all duration-200 group-active:scale-95 shadow-sm">
-              <Phone size={18} className="text-slate-600 group-hover:text-sky-600 transition-colors" />
+            <div className="w-12 h-12 bg-[var(--app-surface)] border border-[var(--app-border)]/60 hover:bg-[var(--app-border)] hover:border-[var(--app-border)] rounded-2xl flex items-center justify-center transition-all duration-200 group-active:scale-95 shadow-sm">
+              <Phone size={18} className="text-[var(--app-muted)] group-hover:text-sky-600 transition-colors" />
             </div>
-            <span className="text-[11px] font-500 text-slate-500">Call</span>
+            <span className="text-[11px] font-500 text-[var(--app-muted)]">Call</span>
           </button>
           <button
             onClick={() => onStartCall?.(conversation.id, 'video')}
             className="flex flex-col items-center gap-1.5 group flex-1"
           >
-            <div className="w-12 h-12 bg-white border border-slate-200/60 hover:bg-slate-50 hover:border-slate-300 rounded-2xl flex items-center justify-center transition-all duration-200 group-active:scale-95 shadow-sm">
-              <Video size={18} className="text-slate-600 group-hover:text-sky-600 transition-colors" />
+            <div className="w-12 h-12 bg-[var(--app-surface)] border border-[var(--app-border)]/60 hover:bg-[var(--app-border)] hover:border-[var(--app-border)] rounded-2xl flex items-center justify-center transition-all duration-200 group-active:scale-95 shadow-sm">
+              <Video size={18} className="text-[var(--app-muted)] group-hover:text-sky-600 transition-colors" />
             </div>
-            <span className="text-[11px] font-500 text-slate-500">Video</span>
+            <span className="text-[11px] font-500 text-[var(--app-muted)]">Video</span>
           </button>
           <button
             onClick={() => toast.info('Email copied')}
             className="flex flex-col items-center gap-1.5 group flex-1"
           >
-            <div className="w-12 h-12 bg-white border border-slate-200/60 hover:bg-slate-50 hover:border-slate-300 rounded-2xl flex items-center justify-center transition-all duration-200 group-active:scale-95 shadow-sm">
-              <Mail size={18} className="text-slate-600 group-hover:text-sky-600 transition-colors" />
+            <div className="w-12 h-12 bg-[var(--app-surface)] border border-[var(--app-border)]/60 hover:bg-[var(--app-border)] hover:border-[var(--app-border)] rounded-2xl flex items-center justify-center transition-all duration-200 group-active:scale-95 shadow-sm">
+              <Mail size={18} className="text-[var(--app-muted)] group-hover:text-sky-600 transition-colors" />
             </div>
-            <span className="text-[11px] font-500 text-slate-500">Email</span>
+            <span className="text-[11px] font-500 text-[var(--app-muted)]">Email</span>
           </button>
           {conversation.isGroup && (
             <button
               onClick={loadMembers}
               className="flex flex-col items-center gap-1.5 group flex-1"
             >
-              <div className="w-12 h-12 bg-white border border-slate-200/60 hover:bg-slate-50 hover:border-slate-300 rounded-2xl flex items-center justify-center transition-all duration-200 group-active:scale-95 shadow-sm">
-                <Users size={18} className="text-slate-600 group-hover:text-sky-600 transition-colors" />
+              <div className="w-12 h-12 bg-[var(--app-surface)] border border-[var(--app-border)]/60 hover:bg-[var(--app-border)] hover:border-[var(--app-border)] rounded-2xl flex items-center justify-center transition-all duration-200 group-active:scale-95 shadow-sm">
+                <Users size={18} className="text-[var(--app-muted)] group-hover:text-sky-600 transition-colors" />
               </div>
-              <span className="text-[11px] font-500 text-slate-500">Members</span>
+              <span className="text-[11px] font-500 text-[var(--app-muted)]">Members</span>
             </button>
           )}
         </div>
@@ -500,7 +529,7 @@ export default function ContactInfoPanel({
                 value={memberEmailsInput}
                 onChange={(e) => setMemberEmailsInput(e.target.value)}
                 placeholder="Add by email, comma or new line separated"
-                className="w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-sky-400/40 resize-none"
+                className="w-full border border-[var(--app-border)] rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-sky-400/40 resize-none"
               />
               <button
                 type="button"
@@ -514,7 +543,7 @@ export default function ContactInfoPanel({
             </div>
           )}
 
-          <div className="max-h-60 overflow-y-auto rounded-xl border border-slate-100">
+          <div className="max-h-60 overflow-y-auto rounded-xl border border-[var(--app-border)]">
             {isLoadingMembers ? (
               <p className="px-3 py-6 text-center text-xs text-gray-400">Loading members...</p>
             ) : sortedMembers.length === 0 ? (
@@ -525,9 +554,9 @@ export default function ContactInfoPanel({
                 return (
                   <div
                     key={member.id}
-                    className="px-3 py-2.5 border-b border-slate-100 last:border-b-0 flex items-center gap-3"
+                    className="px-3 py-2.5 border-b border-[var(--app-border)] last:border-b-0 flex items-center gap-3"
                   >
-                    <div className="w-8 h-8 rounded-full overflow-hidden bg-slate-100">
+                    <div className="w-8 h-8 rounded-full overflow-hidden bg-[var(--app-bg)]">
                       <AppImage
                         src={member.avatarUrl || `https://i.pravatar.cc/48?u=${encodeURIComponent(member.email)}`}
                         alt={`${member.name} avatar`}
@@ -537,11 +566,11 @@ export default function ContactInfoPanel({
                       />
                     </div>
                     <div className="flex-1 min-w-0">
-                      <p className="text-sm font-600 text-slate-800 truncate">{member.name}</p>
-                      <p className="text-xs text-slate-500 truncate">{member.email}</p>
+                      <p className="text-sm font-600 text-[var(--app-text)] truncate">{member.name}</p>
+                      <p className="text-xs text-[var(--app-muted)] truncate">{member.email}</p>
                     </div>
                     <div className="flex items-center gap-2">
-                      <span className="text-[11px] px-2 py-0.5 rounded-full bg-slate-100 text-slate-600 uppercase">
+                      <span className="text-[11px] px-2 py-0.5 rounded-full bg-[var(--app-bg)] text-[var(--app-muted)] uppercase">
                         {member.role || 'member'}
                       </span>
                       {canRemove && (
@@ -566,20 +595,20 @@ export default function ContactInfoPanel({
       {!conversation.isGroup && (
         <div className="px-4 py-4 border-b border-gray-50">
           <p className="text-xs font-600 text-gray-400 uppercase tracking-widest mb-2">About</p>
-          <p className="text-sm text-gray-600 leading-relaxed">Hey there! I am using ChatApp.</p>
+          <p className="text-sm text-[var(--app-muted)] leading-relaxed">Hey there! I am using ChatApp.</p>
           <p className="text-xs text-gray-400 mt-1.5">Joined March 2024</p>
         </div>
       )}
 
-      <div className="border-b border-slate-100/60">
+      <div className="border-b border-[var(--app-border)]/60">
         <button
           onClick={() => setShowMedia(!showMedia)}
-          className="w-full px-4 py-3 flex items-center justify-between hover:bg-gray-50 transition-colors"
+          className="w-full px-4 py-3 flex items-center justify-between hover:bg-[var(--app-border)] transition-colors"
         >
           <div className="flex items-center gap-2">
             <ImageIcon size={15} className="text-gray-400" />
-            <p className="text-xs font-600 text-gray-700 uppercase tracking-widest">Shared Media</p>
-            <span className="text-xs text-gray-400 bg-gray-100 px-2 py-0.5 rounded-full">
+            <p className="text-xs font-600 text-[var(--app-text)] uppercase tracking-widest">Shared Media</p>
+            <span className="text-xs text-gray-400 bg-[var(--app-bg)] px-2 py-0.5 rounded-full">
               {sharedMedia.length}
             </span>
           </div>
@@ -610,9 +639,9 @@ export default function ContactInfoPanel({
               <button
                 onClick={handleLoadMoreShared}
                 disabled={isLoadingMoreShared}
-                className="col-span-3 rounded-lg bg-gray-100 hover:bg-gray-200 disabled:bg-gray-100/70 flex items-center justify-center py-2 transition-colors duration-150"
+                className="col-span-3 rounded-lg bg-[var(--app-bg)] hover:bg-gray-200 disabled:bg-gray-100/70 flex items-center justify-center py-2 transition-colors duration-150"
               >
-                <span className="text-xs font-600 text-gray-500">
+                <span className="text-xs font-600 text-[var(--app-muted)]">
                   {isLoadingMoreShared ? 'Loading more...' : 'Load more media'}
                 </span>
               </button>
@@ -621,15 +650,15 @@ export default function ContactInfoPanel({
         )}
       </div>
 
-      <div className="border-b border-slate-100/60">
+      <div className="border-b border-[var(--app-border)]/60">
         <button
           onClick={() => setShowFiles(!showFiles)}
-          className="w-full px-4 py-3 flex items-center justify-between hover:bg-gray-50 transition-colors"
+          className="w-full px-4 py-3 flex items-center justify-between hover:bg-[var(--app-border)] transition-colors"
         >
           <div className="flex items-center gap-2">
             <FileText size={15} className="text-gray-400" />
-            <p className="text-xs font-600 text-gray-700 uppercase tracking-widest">Shared Files</p>
-            <span className="text-xs text-gray-400 bg-gray-100 px-2 py-0.5 rounded-full">
+            <p className="text-xs font-600 text-[var(--app-text)] uppercase tracking-widest">Shared Files</p>
+            <span className="text-xs text-gray-400 bg-[var(--app-bg)] px-2 py-0.5 rounded-full">
               {sharedFiles.length}
             </span>
           </div>
@@ -651,13 +680,13 @@ export default function ContactInfoPanel({
                     toast.info(`File link for ${file.name} is unavailable`);
                   }
                 }}
-                className="flex items-center gap-3 p-2.5 rounded-xl hover:bg-gray-50 transition-colors duration-150 text-left group"
+                className="flex items-center gap-3 p-2.5 rounded-xl hover:bg-[var(--app-border)] transition-colors duration-150 text-left group"
               >
                 <div className="w-9 h-9 rounded-lg flex items-center justify-center shrink-0 text-sky-500 bg-sky-50">
                   <FileText size={16} />
                 </div>
                 <div className="flex-1 min-w-0">
-                  <p className="text-xs font-600 text-gray-800 truncate">{file.name}</p>
+                  <p className="text-xs font-600 text-[var(--app-text)] truncate">{file.name}</p>
                   <p className="text-xs text-gray-400">{file.size || 'Unknown size'} - {file.date}</p>
                 </div>
                 <Link2 size={13} className="text-gray-300 group-hover:text-sky-500 transition-colors shrink-0" />
@@ -667,7 +696,7 @@ export default function ContactInfoPanel({
               <button
                 onClick={handleLoadMoreShared}
                 disabled={isLoadingMoreShared}
-                className="w-full py-2 rounded-lg bg-gray-100 hover:bg-gray-200 disabled:bg-gray-100/70 text-xs font-600 text-gray-500 transition-colors"
+                className="w-full py-2 rounded-lg bg-[var(--app-bg)] hover:bg-gray-200 disabled:bg-gray-100/70 text-xs font-600 text-[var(--app-muted)] transition-colors"
               >
                 {isLoadingMoreShared ? 'Loading more...' : 'Load more files'}
               </button>
@@ -677,22 +706,49 @@ export default function ContactInfoPanel({
       </div>
 
       <div className="px-4 py-4 flex flex-col gap-2">
+        <p className="text-xs font-600 text-gray-400 uppercase tracking-widest mb-1">Wallpaper</p>
+        
+        <div className="grid grid-cols-5 gap-2 mb-2">
+          {['clean', 'dots', 'gradient', 'midnight'].map(w => (
+            <button
+              key={`wall-${w}`}
+              onClick={() => handleWallpaperChange(w)}
+              className={`aspect-square rounded-xl flex items-center justify-center border-2 transition-transform overflow-hidden relative ${wallpaperDraft === w ? 'border-sky-500 scale-105' : 'border-[var(--app-border)] hover:border-[var(--app-border)]'}`}
+              title={w}
+            >
+              <div className={`w-full h-full chat-wallpaper-${w}`}></div>
+            </button>
+          ))}
+          <label className={`aspect-square rounded-xl flex items-center justify-center border-2 border-dashed transition-transform cursor-pointer relative ${wallpaperDraft.startsWith('http') ? 'border-sky-500 scale-105' : 'border-[var(--app-border)] hover:border-slate-400'}`} title="Custom image">
+            <input type="file" accept="image/*" className="hidden" onChange={(e) => { if (e.target.files?.[0]) handleWallpaperChange('custom', e.target.files[0]); }} disabled={isUploadingWallpaper} />
+            {isUploadingWallpaper ? (
+              <div className="w-4 h-4 border-2 border-sky-200 border-t-sky-500 rounded-full animate-spin" />
+            ) : wallpaperDraft.startsWith('http') ? (
+              <img src={wallpaperDraft} alt="Custom" className="w-full h-full object-cover" />
+            ) : (
+              <ImageIcon size={16} className="text-slate-400" />
+            )}
+          </label>
+        </div>
+      </div>
+
+      <div className="px-4 py-4 flex flex-col gap-2 border-t border-[var(--app-border)]/60">
         <p className="text-xs font-600 text-gray-400 uppercase tracking-widest mb-1">Privacy</p>
 
         <button
           onClick={toggleMute}
-          className="flex items-center gap-3 px-3 py-2.5 rounded-xl hover:bg-gray-50 transition-colors duration-150 text-left group"
+          className="flex items-center gap-3 px-3 py-2.5 rounded-xl hover:bg-[var(--app-border)] transition-colors duration-150 text-left group"
         >
           <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${
-            isMuted ? 'bg-amber-50' : 'bg-gray-100'
+            isMuted ? 'bg-amber-50' : 'bg-[var(--app-bg)]'
           }`}>
             {isMuted
               ? <BellOff size={15} className="text-amber-500" />
-              : <Bell size={15} className="text-gray-500" />
+              : <Bell size={15} className="text-[var(--app-muted)]" />
             }
           </div>
           <div>
-            <p className="text-sm font-500 text-gray-700">
+            <p className="text-sm font-500 text-[var(--app-text)]">
               {isMuted ? 'Unmute notifications' : 'Mute notifications'}
             </p>
             {isMuted && <p className="text-xs text-amber-500">Currently muted</p>}
@@ -701,15 +757,15 @@ export default function ContactInfoPanel({
 
         <button
           onClick={togglePin}
-          className="flex items-center gap-3 px-3 py-2.5 rounded-xl hover:bg-gray-50 transition-colors duration-150 text-left group"
+          className="flex items-center gap-3 px-3 py-2.5 rounded-xl hover:bg-[var(--app-border)] transition-colors duration-150 text-left group"
         >
           <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${
-            isPinned ? 'bg-sky-50' : 'bg-gray-100'
+            isPinned ? 'bg-sky-50' : 'bg-[var(--app-bg)]'
           }`}>
-            <Pin size={15} className={isPinned ? 'text-sky-600' : 'text-gray-500'} />
+            <Pin size={15} className={isPinned ? 'text-sky-600' : 'text-[var(--app-muted)]'} />
           </div>
           <div>
-            <p className="text-sm font-500 text-gray-700">
+            <p className="text-sm font-500 text-[var(--app-text)]">
               {isPinned ? 'Unpin conversation' : 'Pin conversation'}
             </p>
             {isPinned && <p className="text-xs text-sky-500">Pinned to top</p>}
@@ -718,15 +774,15 @@ export default function ContactInfoPanel({
 
         <button
           onClick={toggleArchive}
-          className="flex items-center gap-3 px-3 py-2.5 rounded-xl hover:bg-gray-50 transition-colors duration-150 text-left group"
+          className="flex items-center gap-3 px-3 py-2.5 rounded-xl hover:bg-[var(--app-border)] transition-colors duration-150 text-left group"
         >
           <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${
-            isArchived ? 'bg-sky-50' : 'bg-gray-100'
+            isArchived ? 'bg-sky-50' : 'bg-[var(--app-bg)]'
           }`}>
-            <Archive size={15} className={isArchived ? 'text-sky-600' : 'text-gray-500'} />
+            <Archive size={15} className={isArchived ? 'text-sky-600' : 'text-[var(--app-muted)]'} />
           </div>
           <div>
-            <p className="text-sm font-500 text-gray-700">
+            <p className="text-sm font-500 text-[var(--app-text)]">
               {isArchived ? 'Unarchive conversation' : 'Archive conversation'}
             </p>
             {isArchived && <p className="text-xs text-sky-500">Currently archived</p>}

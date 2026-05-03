@@ -5,6 +5,7 @@ import { getPusherServer } from '@/lib/pusher-server';
 import Conversation from '@/models/Conversation';
 import ConversationMember from '@/models/ConversationMember';
 import Message from '@/models/Message';
+import Notification from '@/models/Notification';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -95,6 +96,32 @@ export async function POST(request) {
       conversationId,
       message: serializedMessage,
     });
+
+    if (normalizedStatus === 'missed') {
+      const otherMembers = await ConversationMember.find({
+        conversationId,
+        userId: { $ne: currentUser._id }
+      });
+      
+      const notifications = otherMembers.map(member => ({
+        userId: member.userId,
+        type: 'missed_call',
+        title: `Missed ${callType} call`,
+        body: `${currentUser.name || 'Someone'} tried to call you.`,
+        conversationId: conversationId,
+      }));
+
+      if (notifications.length > 0) {
+        const createdNotifs = await Notification.insertMany(notifications);
+        for (const notif of createdNotifs) {
+          try {
+            await pusherServer.trigger(`private-user-${notif.userId}`, 'notification-created', {
+              notification: notif,
+            });
+          } catch {}
+        }
+      }
+    }
 
     return NextResponse.json({ message: serializedMessage });
   } catch (error) {

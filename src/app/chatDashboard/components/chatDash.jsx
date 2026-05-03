@@ -14,6 +14,7 @@ import {
   PhoneOff,
   Video,
   X,
+  Bell,
 } from 'lucide-react';
 import ConversationList from './convoList';
 import ChatWindow from './chatWindow';
@@ -34,6 +35,7 @@ export default function ChatDashboard() {
   const [incomingCall, setIncomingCall] = useState(null);
   const [activeCall, setActiveCall] = useState(null);
   const [callLogsRefreshKey, setCallLogsRefreshKey] = useState(0);
+  const [newNotification, setNewNotification] = useState(null);
 
   useEffect(() => {
     let mounted = true;
@@ -399,6 +401,24 @@ export default function ChatDashboard() {
 
     userChannel.bind('conversation-added', onConversationAdded);
 
+    const onNotificationCreated = (payload) => {
+      const notif = payload?.notification;
+      if (notif) {
+        setNewNotification(notif);
+        toast(notif.title, {
+          description: notif.body,
+          icon: <Bell size={16} />,
+          action: {
+            label: 'View',
+            onClick: () => {
+              if (notif.conversationId) handleSelectConversation(notif.conversationId);
+            }
+          }
+        });
+      }
+    };
+    userChannel.bind('notification-created', onNotificationCreated);
+
     return () => {
       subscriptions.forEach(({
         channelName,
@@ -424,6 +444,7 @@ export default function ChatDashboard() {
       });
 
       userChannel.unbind('conversation-added', onConversationAdded);
+      userChannel.unbind('notification-created', onNotificationCreated);
       pusherClient.unsubscribe(userChannelName);
     };
   }, [activeConversationId, conversationIdKey, conversationIdList, currentUser?.id]);
@@ -636,6 +657,10 @@ export default function ChatDashboard() {
   };
 
   const handleConversationPreferencesUpdated = (conversationId, preferences) => {
+    const archivedChanged =
+      typeof preferences.isArchived === 'boolean' &&
+      preferences.isArchived === true;
+
     setConversations((prev) => {
       const next = prev.map((conversation) =>
         conversation.id === conversationId
@@ -649,6 +674,10 @@ export default function ChatDashboard() {
                 typeof preferences.isPinned === 'boolean'
                   ? preferences.isPinned
                   : conversation.isPinned,
+              isArchived:
+                typeof preferences.isArchived === 'boolean'
+                  ? preferences.isArchived
+                  : conversation.isArchived,
             }
           : conversation
       );
@@ -658,6 +687,11 @@ export default function ChatDashboard() {
         return a.isPinned ? -1 : 1;
       });
     });
+
+    if (archivedChanged && activeConversationId === conversationId) {
+      setActiveConversationId(null);
+      setShowInfoPanel(false);
+    }
   };
 
   const handleConversationRemoved = (conversationId) => {
@@ -728,8 +762,24 @@ export default function ChatDashboard() {
     }
   };
 
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  const themeMode = currentUser?.settings?.themeMode || 'system';
+  const resolvedTheme = mounted
+    ? (themeMode === 'system' ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light') : themeMode)
+    : 'light';
+  const accentColor = currentUser?.settings?.accentColor || 'sky';
+
   return (
-    <div className="h-screen flex bg-[#f8fafc] overflow-hidden font-sans antialiased selection:bg-sky-200 selection:text-sky-900 transition-colors duration-300">
+    <div 
+      suppressHydrationWarning
+      className="h-screen flex bg-[var(--app-bg)] overflow-hidden font-sans antialiased selection:bg-[var(--app-accent-soft)] selection:text-[var(--app-text)] transition-colors duration-300"
+      data-theme={resolvedTheme}
+      data-accent={accentColor}
+    >
       <Toaster position="bottom-right" richColors toastOptions={{ className: 'rounded-xl shadow-lg border-0 bg-white/90 backdrop-blur-sm' }} />
 
       {/* Render CallOverlay ALWAYS */}
@@ -743,7 +793,7 @@ export default function ChatDashboard() {
       />
 
       {/* Left — Conversation list */}
-      <div className={`w-full md:w-80 xl:w-96 shrink-0 bg-white border-r border-slate-200/60 flex flex-col h-full z-10 transition-transform duration-300 ${activeConversationId ? 'hidden md:flex' : 'flex'}`}>
+      <div className={`w-full md:w-80 xl:w-96 shrink-0 bg-[var(--app-surface)] border-r border-[var(--app-border)] flex flex-col h-full z-10 transition-transform duration-300 ${activeConversationId ? 'hidden md:flex' : 'flex'}`}>
         <ConversationList
           conversations={filteredConversations}
           activeId={activeConversationId}
@@ -755,6 +805,7 @@ export default function ChatDashboard() {
           onSearchChange={setSearchQuery}
           currentUser={currentUser}
           onStartCall={handleStartCall}
+          newNotification={newNotification}
         />
       </div>
 
@@ -772,6 +823,7 @@ export default function ChatDashboard() {
             conversation={activeConversation}
             conversations={conversations}
             currentUserId={currentUser?.id}
+            chatAppearance={currentUser?.settings?.chatAppearance}
             activeTypingUsers={Object.values(typingByConversation[activeConversation.id] || {})}
             onToggleInfo={() => setShowInfoPanel(!showInfoPanel)}
             onTypingStatusChange={handleTypingStatusChange}
@@ -796,7 +848,7 @@ export default function ChatDashboard() {
 
       {/* Right — Info panel */}
       {showInfoPanel && activeConversation && (
-        <div className="w-72 xl:w-80 shrink-0 bg-white border-l border-slate-200/60 flex flex-col h-full">
+        <div className="w-72 xl:w-80 shrink-0 bg-[var(--app-surface)] border-l border-[var(--app-border)] flex flex-col h-full">
           <ContactInfoPanel
             conversation={activeConversation}
             currentUserId={currentUser?.id}

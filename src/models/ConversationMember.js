@@ -25,6 +25,7 @@ const conversationMemberSchema = new Schema(
     joinedAt: { type: Date, default: Date.now },
     isArchived: { type: Boolean, default: false },
     archivedAt: { type: Date, default: null },
+    wallpaper: { type: String, default: '' },
   },
   {
     timestamps: { createdAt: 'createdAt', updatedAt: 'updatedAt' },

@@ -17,9 +17,18 @@ function serializeUser(user) {
     lastSeen: user.lastSeen,
     createdAt: user.createdAt,
     settings: {
+      status: user.status || 'available',
+      statusText: user.statusText || '',
       desktopNotifications: user.settings?.desktopNotifications ?? true,
       enterToSend: user.settings?.enterToSend ?? true,
       compactMode: user.settings?.compactMode ?? false,
+      themeMode: user.settings?.themeMode || 'system',
+      accentColor: user.settings?.accentColor || 'sky',
+      chatAppearance: {
+        bubbleStyle: user.settings?.chatAppearance?.bubbleStyle || 'rounded',
+        density: user.settings?.chatAppearance?.density || 'comfortable',
+        fontSize: user.settings?.chatAppearance?.fontSize || 'default',
+      }
     },
   };
 }
@@ -60,6 +69,21 @@ export async function PATCH(request) {
     updates.bio = body.bio.trim().slice(0, 160);
   }
 
+  if (typeof body.avatarUrl === 'string') {
+    updates.avatarUrl = body.avatarUrl;
+  }
+
+  if (typeof body.status === 'string') {
+    const validStatuses = ['available', 'busy', 'away', 'offline'];
+    if (validStatuses.includes(body.status)) {
+      updates.status = body.status;
+    }
+  }
+
+  if (typeof body.statusText === 'string') {
+    updates.statusText = body.statusText.trim().slice(0, 80);
+  }
+
   if (typeof body.email === 'string') {
     const email = body.email.toLowerCase().trim();
     if (!email) {
@@ -77,13 +101,14 @@ export async function PATCH(request) {
 
     updates.email = email;
   }
-
   if (body.settings && typeof body.settings === 'object') {
     updates.settings = {
-      desktopNotifications:
-        body.settings.desktopNotifications ?? authUser.settings?.desktopNotifications ?? true,
-      enterToSend: body.settings.enterToSend ?? authUser.settings?.enterToSend ?? true,
-      compactMode: body.settings.compactMode ?? authUser.settings?.compactMode ?? false,
+      ...authUser.settings,
+      ...body.settings,
+      chatAppearance: {
+        ...(authUser.settings?.chatAppearance || {}),
+        ...(body.settings.chatAppearance || {})
+      }
     };
   }
 

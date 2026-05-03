@@ -61,6 +61,7 @@ export default function ChatWindow({
   showInfo,
   onStartCall,
   conversations = [],
+  chatAppearance,
 }) {
   const [inputText, setInputText] = useState('');
   const [showEmoji, setShowEmoji] = useState(false);
@@ -682,7 +683,7 @@ export default function ChatWindow({
   });
 
   return (
-    <div className="flex flex-col h-full bg-slate-50">
+    <div className="flex flex-col h-full bg-[var(--app-bg)]">
       {/* Image Viewer */}
       {viewerImage && (
         <ImageViewer
@@ -708,19 +709,19 @@ export default function ChatWindow({
         onCancel={() => setConfirmDelete(null)}
       />
 
-      <div className="bg-white border-b border-slate-200/60 px-5 py-3.5 flex items-center gap-3 flex-shrink-0 z-10 shadow-sm">
+      <div className="bg-[var(--app-surface)] border-b border-[var(--app-border)]/60 px-5 py-3.5 flex items-center gap-3 flex-shrink-0 z-10 shadow-sm">
         {/* Mobile back button */}
         {onBack && (
           <button
             onClick={onBack}
-            className="w-9 h-9 flex items-center justify-center rounded-xl text-gray-500 hover:bg-gray-100 transition-all duration-150 md:hidden flex-shrink-0"
+            className="w-9 h-9 flex items-center justify-center rounded-xl text-[var(--app-muted)] hover:bg-[var(--app-border)] transition-all duration-150 md:hidden flex-shrink-0"
             title="Back"
           >
             <ArrowLeft size={18} />
           </button>
         )}
         <div className="relative flex-shrink-0">
-          <div className="w-10 h-10 rounded-full overflow-hidden bg-gray-100">
+          <div className="w-10 h-10 rounded-full overflow-hidden bg-[var(--app-bg)]">
             <AppImage
               src={conversation.avatar}
               alt={conversation.avatarAlt}
@@ -736,9 +737,9 @@ export default function ChatWindow({
 
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2">
-            <p className="text-sm font-bold text-gray-900 truncate">{conversation.name}</p>
+            <p className="text-sm font-bold text-[var(--app-text)] truncate">{conversation.name}</p>
             {conversation.isGroup && (
-              <span className="text-xs text-gray-400 bg-gray-100 px-2 py-0.5 rounded-full">
+              <span className="text-xs text-gray-400 bg-[var(--app-bg)] px-2 py-0.5 rounded-full">
                 {conversation.members} members
               </span>
             )}
@@ -756,7 +757,7 @@ export default function ChatWindow({
               setShowScheduledManager(!showScheduledManager);
             }}
             className={`w-9 h-9 flex items-center justify-center rounded-xl transition-all duration-150 ${
-              showScheduledManager ? 'bg-sky-50 text-sky-600' : 'text-gray-500 hover:bg-gray-100 hover:text-sky-600'
+              showScheduledManager ? 'bg-sky-50 text-sky-600' : 'text-[var(--app-muted)] hover:bg-[var(--app-border)] hover:text-sky-600'
             }`}
             title="Scheduled messages"
           >
@@ -771,7 +772,7 @@ export default function ChatWindow({
               }
             }}
             className={`w-9 h-9 flex items-center justify-center rounded-xl transition-all duration-150 ${
-              isChatSearchOpen ? 'bg-sky-50 text-sky-600' : 'text-gray-500 hover:bg-gray-100 hover:text-sky-600'
+              isChatSearchOpen ? 'bg-sky-50 text-sky-600' : 'text-[var(--app-muted)] hover:bg-[var(--app-border)] hover:text-sky-600'
             }`}
             title="Search in chat"
           >
@@ -780,7 +781,7 @@ export default function ChatWindow({
           <button
             onClick={onToggleInfo}
             className={`w-9 h-9 flex items-center justify-center rounded-xl transition-all duration-150 ${
-              showInfo ? 'bg-sky-50 text-sky-600' : 'text-gray-500 hover:bg-gray-100 hover:text-sky-600'
+              showInfo ? 'bg-sky-50 text-sky-600' : 'text-[var(--app-muted)] hover:bg-[var(--app-border)] hover:text-sky-600'
             }`}
             title="Contact info"
           >
@@ -790,7 +791,7 @@ export default function ChatWindow({
       </div>
 
       {isChatSearchOpen && (
-        <div className="bg-white border-b border-slate-200/60 px-5 py-2.5 flex items-center gap-3 z-10 shadow-sm flex-shrink-0 animate-in fade-in slide-in-from-top-2">
+        <div className="bg-[var(--app-surface)] border-b border-[var(--app-border)]/60 px-5 py-2.5 flex items-center gap-3 z-10 shadow-sm flex-shrink-0 animate-in fade-in slide-in-from-top-2">
           <div className="relative flex-1">
             <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
             <input
@@ -802,17 +803,17 @@ export default function ChatWindow({
                 setActiveSearchIndex(0);
               }}
               placeholder="Search in conversation..."
-              className="w-full bg-slate-50 border border-slate-200 rounded-lg pl-9 pr-3 py-1.5 text-sm text-gray-700 focus:outline-none focus:border-sky-400 focus:ring-1 focus:ring-sky-400 transition-all"
+              className="w-full bg-[var(--app-bg)] border border-[var(--app-border)] rounded-lg pl-9 pr-3 py-1.5 text-sm text-[var(--app-text)] focus:outline-none focus:border-sky-400 focus:ring-1 focus:ring-sky-400 transition-all"
             />
           </div>
           {chatSearchQuery.trim() && (
-            <div className="flex items-center gap-2 text-sm text-gray-500 font-medium whitespace-nowrap">
+            <div className="flex items-center gap-2 text-sm text-[var(--app-muted)] font-medium whitespace-nowrap">
               {searchResults.length > 0 ? (
                 <>
                   <span>{activeSearchIndex + 1} of {searchResults.length}</span>
                   <div className="flex items-center gap-0.5">
-                    <button onClick={handlePrevSearch} className="p-1 hover:bg-gray-100 rounded text-gray-600"><ChevronUp size={16} /></button>
-                    <button onClick={handleNextSearch} className="p-1 hover:bg-gray-100 rounded text-gray-600"><ChevronDown size={16} /></button>
+                    <button onClick={handlePrevSearch} className="p-1 hover:bg-[var(--app-border)] rounded text-[var(--app-muted)]"><ChevronUp size={16} /></button>
+                    <button onClick={handleNextSearch} className="p-1 hover:bg-[var(--app-border)] rounded text-[var(--app-muted)]"><ChevronDown size={16} /></button>
                   </div>
                 </>
               ) : (
@@ -820,17 +821,17 @@ export default function ChatWindow({
               )}
             </div>
           )}
-          <button onClick={() => { setIsChatSearchOpen(false); setChatSearchQuery(''); }} className="p-1.5 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition-colors">
+          <button onClick={() => { setIsChatSearchOpen(false); setChatSearchQuery(''); }} className="p-1.5 text-gray-400 hover:text-[var(--app-muted)] hover:bg-[var(--app-border)] rounded-lg transition-colors">
             <X size={16} />
           </button>
         </div>
       )}
 
       {showScheduledManager && (
-        <div className="bg-white border-b border-slate-200/60 p-4 z-10 shadow-sm flex-shrink-0 max-h-64 overflow-y-auto animate-in fade-in slide-in-from-top-2">
+        <div className="bg-[var(--app-surface)] border-b border-[var(--app-border)]/60 p-4 z-10 shadow-sm flex-shrink-0 max-h-64 overflow-y-auto animate-in fade-in slide-in-from-top-2">
           <div className="flex items-center justify-between mb-3">
-            <h3 className="text-sm font-bold text-gray-800 flex items-center gap-2"><CalendarClock size={16} className="text-sky-500" /> Scheduled Messages</h3>
-            <button onClick={() => setShowScheduledManager(false)} className="text-gray-400 hover:text-gray-600"><X size={16} /></button>
+            <h3 className="text-sm font-bold text-[var(--app-text)] flex items-center gap-2"><CalendarClock size={16} className="text-sky-500" /> Scheduled Messages</h3>
+            <button onClick={() => setShowScheduledManager(false)} className="text-gray-400 hover:text-[var(--app-muted)]"><X size={16} /></button>
           </div>
           {isLoadingScheduled ? (
             <div className="text-center py-4 text-xs text-gray-400">Loading...</div>
@@ -839,14 +840,14 @@ export default function ChatWindow({
           ) : (
             <div className="flex flex-col gap-2">
               {scheduledMessages.map(msg => (
-                <div key={msg.id} className="bg-slate-50 border border-slate-100 rounded-xl p-3 flex flex-col gap-2">
+                <div key={msg.id} className="bg-[var(--app-bg)] border border-[var(--app-border)] rounded-xl p-3 flex flex-col gap-2">
                   {editingScheduledMessage?.id === msg.id ? (
                     <div className="flex flex-col gap-2">
                       <input
                         type="text"
                         value={editingScheduledMessage.text}
                         onChange={(e) => setEditingScheduledMessage({ ...editingScheduledMessage, text: e.target.value })}
-                        className="w-full bg-white border border-slate-200 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:border-sky-400"
+                        className="w-full bg-[var(--app-surface)] border border-[var(--app-border)] rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:border-sky-400"
                       />
                       <input
                         type="datetime-local"
@@ -856,21 +857,21 @@ export default function ChatWindow({
                           return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
                         })()}
                         onChange={(e) => setEditingScheduledMessage({ ...editingScheduledMessage, scheduledFor: new Date(e.target.value).toISOString() })}
-                        className="w-full bg-white border border-slate-200 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:border-sky-400"
+                        className="w-full bg-[var(--app-surface)] border border-[var(--app-border)] rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:border-sky-400"
                       />
                       <div className="flex items-center justify-end gap-2 mt-1">
-                        <button onClick={() => setEditingScheduledMessage(null)} className="text-xs text-gray-500 hover:text-gray-700 font-medium">Cancel</button>
+                        <button onClick={() => setEditingScheduledMessage(null)} className="text-xs text-[var(--app-muted)] hover:text-[var(--app-text)] font-medium">Cancel</button>
                         <button onClick={() => updateScheduledMessage(msg.id, editingScheduledMessage.text, new Date(editingScheduledMessage.scheduledFor))} className="text-xs text-sky-600 hover:text-sky-700 font-medium">Save</button>
                       </div>
                     </div>
                   ) : (
                     <>
                       <div className="flex items-start justify-between gap-2">
-                        <p className="text-sm text-gray-700 truncate">{msg.text}</p>
+                        <p className="text-sm text-[var(--app-text)] truncate">{msg.text}</p>
                         <span className="text-[10px] font-semibold text-sky-500 bg-sky-50 px-2 py-0.5 rounded-full flex-shrink-0 whitespace-nowrap">Scheduled</span>
                       </div>
                       <div className="flex items-center justify-between mt-1">
-                        <p className="text-xs text-gray-500 flex items-center gap-1"><Clock size={12}/> {new Date(msg.scheduledFor).toLocaleString()}</p>
+                        <p className="text-xs text-[var(--app-muted)] flex items-center gap-1"><Clock size={12}/> {new Date(msg.scheduledFor).toLocaleString()}</p>
                         <div className="flex items-center gap-2">
                           <button onClick={() => setEditingScheduledMessage(msg)} className="text-xs text-sky-600 hover:text-sky-700 font-medium">Edit</button>
                           <span className="text-gray-300">|</span>
@@ -888,14 +889,17 @@ export default function ChatWindow({
         </div>
       )}
 
-      <div className="flex-1 overflow-y-auto chat-scrollbar px-4 py-4 flex flex-col gap-1">
+      <div className={`relative flex-1 overflow-y-auto chat-scrollbar px-4 py-4 flex flex-col gap-1 ${chatAppearance?.bubbleStyle ? `bubble-${chatAppearance.bubbleStyle}` : ''} ${chatAppearance?.density ? `density-${chatAppearance.density}` : ''} ${chatAppearance?.fontSize ? `font-${chatAppearance.fontSize}` : ''} ${conversation.wallpaper && !conversation.wallpaper.startsWith('http') ? `chat-wallpaper-${conversation.wallpaper}` : ''}`} style={conversation.wallpaper?.startsWith('http') ? { backgroundImage: `url(${conversation.wallpaper})`, backgroundSize: 'cover', backgroundPosition: 'center' } : {}}>
+        {conversation.wallpaper && (
+          <div className="absolute inset-0 bg-[var(--app-surface)]/40 pointer-events-none mix-blend-overlay" />
+        )}
         {groupedMessages.map((group) => (
           <div key={`date-group-${group.date}`} className="flex flex-col gap-1">
             <div className="flex items-center justify-center my-4 relative">
               <div className="absolute inset-0 flex items-center" aria-hidden="true">
-                <div className="w-full border-t border-slate-200/60"></div>
+                <div className="w-full border-t border-[var(--app-border)]/60"></div>
               </div>
-              <span className="relative text-[11px] font-600 text-slate-400 uppercase tracking-widest bg-slate-50 px-3">
+              <span className="relative text-[11px] font-600 text-slate-400 uppercase tracking-widest bg-[var(--app-bg)] px-3">
                 {group.date}
               </span>
             </div>
@@ -955,10 +959,10 @@ export default function ChatWindow({
       )}
 
       {showEmoji && (
-        <div className="bg-white border-t border-gray-100 px-4 py-3 flex-shrink-0">
+        <div className="bg-[var(--app-surface)] border-t border-[var(--app-border)] px-4 py-3 flex-shrink-0">
           <div className="flex items-center justify-between mb-2">
-            <p className="text-xs font-semibold text-gray-500">Insert emoji</p>
-            <button onClick={() => setShowEmoji(false)} className="text-gray-400 hover:text-gray-600">
+            <p className="text-xs font-semibold text-[var(--app-muted)]">Insert emoji</p>
+            <button onClick={() => setShowEmoji(false)} className="text-gray-400 hover:text-[var(--app-muted)]">
               <X size={14} />
             </button>
           </div>
@@ -967,7 +971,7 @@ export default function ChatWindow({
               <button
                 key={`emoji-${emoji}`}
                 onClick={() => appendEmoji(emoji)}
-                className="text-xl px-2 py-1 bg-gray-100 rounded-md hover:bg-gray-200 transition-colors"
+                className="text-xl px-2 py-1 bg-[var(--app-bg)] rounded-md hover:bg-gray-200 transition-colors"
               >
               {emoji}
               </button>
@@ -977,12 +981,12 @@ export default function ChatWindow({
       )}
 
       {showSchedulePicker && (
-        <div className="bg-white border-t border-slate-100 px-4 py-3 flex-shrink-0 flex items-center justify-between shadow-sm z-10">
+        <div className="bg-[var(--app-surface)] border-t border-[var(--app-border)] px-4 py-3 flex-shrink-0 flex items-center justify-between shadow-sm z-10">
           <div className="flex items-center gap-3">
             <CalendarClock size={18} className="text-sky-600" />
             <div className="flex flex-col">
-              <span className="text-xs font-semibold text-slate-700">Schedule Message</span>
-              <span className="text-[10px] text-slate-500">Pick a time to automatically send this message</span>
+              <span className="text-xs font-semibold text-[var(--app-text)]">Schedule Message</span>
+              <span className="text-[10px] text-[var(--app-muted)]">Pick a time to automatically send this message</span>
             </div>
           </div>
           <div className="flex items-center gap-2">
@@ -990,10 +994,10 @@ export default function ChatWindow({
               type="datetime-local" 
               value={scheduleDate}
               onChange={(e) => setScheduleDate(e.target.value)}
-              className="text-xs border border-slate-200 rounded-lg px-2 py-1.5 text-slate-700 focus:ring-2 focus:ring-sky-500/20 focus:outline-none"
+              className="text-xs border border-[var(--app-border)] rounded-lg px-2 py-1.5 text-[var(--app-text)] focus:ring-2 focus:ring-sky-500/20 focus:outline-none"
               min={new Date().toISOString().slice(0, 16)}
             />
-            <button onClick={() => { setShowSchedulePicker(false); setScheduleDate(''); }} className="text-slate-400 hover:text-slate-600">
+            <button onClick={() => { setShowSchedulePicker(false); setScheduleDate(''); }} className="text-slate-400 hover:text-[var(--app-muted)]">
               <X size={16} />
             </button>
           </div>
@@ -1002,18 +1006,18 @@ export default function ChatWindow({
 
       {/* Analyzer Panel */}
       {showAnalyzer && (
-        <div className="bg-white border-t border-slate-200/60 p-4 flex-shrink-0 z-10 shadow-[0_-4px_10px_rgba(0,0,0,0.02)] max-h-80 overflow-y-auto chat-scrollbar">
+        <div className="bg-[var(--app-surface)] border-t border-[var(--app-border)]/60 p-4 flex-shrink-0 z-10 shadow-[0_-4px_10px_rgba(0,0,0,0.02)] max-h-80 overflow-y-auto chat-scrollbar">
           <div className="flex items-center justify-between mb-3">
             <div className="flex items-center gap-2">
               <Bot size={18} className="text-sky-600" />
-              <p className="text-sm font-semibold text-slate-800">Chat Analyzer</p>
+              <p className="text-sm font-semibold text-[var(--app-text)]">Chat Analyzer</p>
               {analyzeResult?.tone && (
                 <span className="text-[10px] font-semibold bg-sky-50 text-sky-600 px-2 py-0.5 rounded-full uppercase tracking-wider">
                   {analyzeResult.tone}
                 </span>
               )}
             </div>
-            <button onClick={() => setShowAnalyzer(false)} className="text-slate-400 hover:text-slate-600">
+            <button onClick={() => setShowAnalyzer(false)} className="text-slate-400 hover:text-[var(--app-muted)]">
               <X size={16} />
             </button>
           </div>
@@ -1021,7 +1025,7 @@ export default function ChatWindow({
           {analyzeError ? (
             <div className="text-sm text-red-500 py-4 text-center bg-red-50 rounded-xl">{analyzeError}</div>
           ) : !analyzeResult ? (
-            <div className="text-sm text-slate-500 py-4 text-center flex flex-col items-center gap-2">
+            <div className="text-sm text-[var(--app-muted)] py-4 text-center flex flex-col items-center gap-2">
               <RefreshCw size={24} className="animate-spin text-sky-400" />
               Analyzing conversation...
             </div>
@@ -1030,28 +1034,28 @@ export default function ChatWindow({
               {analyzeResult.summary && (
                 <div>
                   <p className="text-[11px] font-600 text-slate-400 uppercase tracking-widest mb-1">Summary</p>
-                  <p className="text-sm text-slate-700 bg-slate-50 p-3 rounded-xl border border-slate-100/60">{analyzeResult.summary}</p>
+                  <p className="text-sm text-[var(--app-text)] bg-[var(--app-bg)] p-3 rounded-xl border border-[var(--app-border)]/60">{analyzeResult.summary}</p>
                 </div>
               )}
               
               {analyzeResult.pendingQuestions?.length > 0 ? (
                 <div>
                   <p className="text-[11px] font-600 text-slate-400 uppercase tracking-widest mb-1">Pending Questions</p>
-                  <ul className="list-disc pl-4 text-sm text-slate-700 space-y-1">
+                  <ul className="list-disc pl-4 text-sm text-[var(--app-text)] space-y-1">
                     {analyzeResult.pendingQuestions.map((q, i) => <li key={i}>{q}</li>)}
                   </ul>
                 </div>
               ) : (
                 <div>
                   <p className="text-[11px] font-600 text-slate-400 uppercase tracking-widest mb-1">Pending Questions</p>
-                  <p className="text-sm text-slate-500 italic">No open questions found.</p>
+                  <p className="text-sm text-[var(--app-muted)] italic">No open questions found.</p>
                 </div>
               )}
 
               {analyzeResult.actionItems?.length > 0 && (
                 <div>
                   <p className="text-[11px] font-600 text-slate-400 uppercase tracking-widest mb-1">Action Items</p>
-                  <ul className="list-disc pl-4 text-sm text-slate-700 space-y-1">
+                  <ul className="list-disc pl-4 text-sm text-[var(--app-text)] space-y-1">
                     {analyzeResult.actionItems.map((a, i) => <li key={i}>{a}</li>)}
                   </ul>
                 </div>
@@ -1068,7 +1072,7 @@ export default function ChatWindow({
                           setAnalyzeTone(e.target.value);
                           handleAnalyze(e.target.value);
                         }}
-                        className="text-xs border border-slate-200/60 rounded-lg px-2 py-1 bg-white text-slate-700 focus:outline-none focus:ring-2 focus:ring-sky-500/20"
+                        className="text-xs border border-[var(--app-border)]/60 rounded-lg px-2 py-1 bg-[var(--app-surface)] text-[var(--app-text)] focus:outline-none focus:ring-2 focus:ring-sky-500/20"
                       >
                         <option value="friendly">Friendly</option>
                         <option value="casual">Casual</option>
@@ -1077,7 +1081,7 @@ export default function ChatWindow({
                       </select>
                       <button 
                         onClick={() => handleAnalyze()}
-                        className="p-1 rounded bg-slate-50 hover:bg-slate-100 text-slate-600 transition-colors border border-slate-200/60"
+                        className="p-1 rounded bg-[var(--app-bg)] hover:bg-[var(--app-border)] text-[var(--app-muted)] transition-colors border border-[var(--app-border)]/60"
                         title="Regenerate"
                       >
                         <RefreshCw size={14} className={isAnalyzing ? "animate-spin" : ""} />
@@ -1093,7 +1097,7 @@ export default function ChatWindow({
                           setShowAnalyzer(false);
                           inputRef.current?.focus();
                         }}
-                        className="text-left bg-sky-50/50 hover:bg-sky-50 border border-sky-100 text-slate-700 rounded-xl px-3 py-2 text-sm transition-colors"
+                        className="text-left bg-sky-50/50 hover:bg-sky-50 border border-sky-100 text-[var(--app-text)] rounded-xl px-3 py-2 text-sm transition-colors"
                       >
                         <span className="font-semibold text-sky-600 block text-[11px] mb-0.5">{reply.label}</span>
                         {reply.text}
@@ -1107,7 +1111,7 @@ export default function ChatWindow({
         </div>
       )}
 
-      <div className="bg-white border-t border-slate-200/60 px-4 py-3.5 flex items-center gap-3 flex-shrink-0 z-10 shadow-sm">
+      <div className="bg-[var(--app-surface)] border-t border-[var(--app-border)]/60 px-4 py-3.5 flex items-center gap-3 flex-shrink-0 z-10 shadow-sm">
         <div className="relative group">
           <input
             ref={imageInputRef}
@@ -1124,22 +1128,22 @@ export default function ChatWindow({
           />
           <button
             disabled={isUploading}
-            className="w-9 h-9 flex items-center justify-center rounded-xl text-gray-400 hover:bg-gray-100 hover:text-sky-600 transition-all duration-150"
+            className="w-9 h-9 flex items-center justify-center rounded-xl text-gray-400 hover:bg-[var(--app-border)] hover:text-sky-600 transition-all duration-150"
             title="Attach file"
           >
             <Paperclip size={19} />
           </button>
-          <div className="absolute bottom-12 left-0 bg-white border border-gray-100 rounded-xl shadow-lg p-1 hidden group-hover:flex flex-col gap-0.5 w-36 z-10">
+          <div className="absolute bottom-12 left-0 bg-[var(--app-surface)] border border-[var(--app-border)] rounded-xl shadow-lg p-1 hidden group-hover:flex flex-col gap-0.5 w-36 z-10">
             <button
               onClick={() => imageInputRef.current?.click()}
-              className="flex items-center gap-2.5 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 rounded-lg transition-colors"
+              className="flex items-center gap-2.5 px-3 py-2 text-sm text-[var(--app-text)] hover:bg-[var(--app-border)] rounded-lg transition-colors"
             >
               <ImageIcon size={15} className="text-sky-500" />
               Photo
             </button>
             <button
               onClick={() => fileInputRef.current?.click()}
-              className="flex items-center gap-2.5 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 rounded-lg transition-colors"
+              className="flex items-center gap-2.5 px-3 py-2 text-sm text-[var(--app-text)] hover:bg-[var(--app-border)] rounded-lg transition-colors"
             >
               <FileText size={15} className="text-emerald-500" />
               Document
@@ -1150,7 +1154,7 @@ export default function ChatWindow({
         <button
           onClick={() => setShowEmoji(!showEmoji)}
           className={`w-9 h-9 flex items-center justify-center rounded-xl transition-all duration-150 ${
-            showEmoji ? 'bg-sky-50 text-sky-600' : 'text-gray-400 hover:bg-gray-100 hover:text-sky-600'
+            showEmoji ? 'bg-sky-50 text-sky-600' : 'text-gray-400 hover:bg-[var(--app-border)] hover:text-sky-600'
           }`}
           title="Emoji"
         >
@@ -1161,7 +1165,7 @@ export default function ChatWindow({
           onClick={() => handleAnalyze()}
           disabled={isAnalyzing}
           className={`w-9 h-9 flex items-center justify-center rounded-xl transition-all duration-150 ${
-            showAnalyzer || isAnalyzing ? 'bg-sky-50 text-sky-600' : 'text-gray-400 hover:bg-gray-100 hover:text-sky-600'
+            showAnalyzer || isAnalyzing ? 'bg-sky-50 text-sky-600' : 'text-gray-400 hover:bg-[var(--app-border)] hover:text-sky-600'
           }`}
           title="Analyze chat"
         >
@@ -1175,7 +1179,7 @@ export default function ChatWindow({
         <button
           onClick={() => setShowSchedulePicker(!showSchedulePicker)}
           className={`w-9 h-9 flex items-center justify-center rounded-xl transition-all duration-150 ${
-            showSchedulePicker || scheduleDate ? 'bg-sky-50 text-sky-600' : 'text-gray-400 hover:bg-gray-100 hover:text-sky-600'
+            showSchedulePicker || scheduleDate ? 'bg-sky-50 text-sky-600' : 'text-gray-400 hover:bg-[var(--app-border)] hover:text-sky-600'
           }`}
           title="Schedule message"
         >
@@ -1203,7 +1207,7 @@ export default function ChatWindow({
               onChange={handleInputChange}
               onBlur={() => emitTyping(false)}
               onKeyDown={handleKeyDown}
-              className="w-full bg-slate-50 border border-slate-200/60 rounded-full px-4 py-2.5 text-sm text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-4 focus:ring-sky-500/10 focus:border-sky-400 transition-all duration-200"
+              className="w-full bg-[var(--app-bg)] border border-[var(--app-border)]/60 rounded-full px-4 py-2.5 text-sm text-[var(--app-text)] placeholder-slate-400 focus:outline-none focus:ring-4 focus:ring-sky-500/10 focus:border-sky-400 transition-all duration-200"
             />
           </div>
         )}
@@ -1219,7 +1223,7 @@ export default function ChatWindow({
         ) : (
           <button
             onClick={() => (isUploading ? null : startRecording())}
-            className="w-10 h-10 flex items-center justify-center rounded-xl text-gray-400 hover:bg-gray-100 hover:text-sky-600 transition-all duration-150 flex-shrink-0"
+            className="w-10 h-10 flex items-center justify-center rounded-xl text-gray-400 hover:bg-[var(--app-border)] hover:text-sky-600 transition-all duration-150 flex-shrink-0"
             title={isUploading ? 'Uploading...' : 'Record voice message'}
           >
             {isUploading ? (
@@ -1236,17 +1240,17 @@ export default function ChatWindow({
 
       {/* Forward Modal */}
       {isForwarding && (
-        <div className="absolute inset-0 bg-white/50 backdrop-blur-sm z-50 flex items-center justify-center">
+        <div className="absolute inset-0 bg-[var(--app-surface)]/50 backdrop-blur-sm z-50 flex items-center justify-center">
           <RefreshCw size={24} className="text-sky-500 animate-spin" />
         </div>
       )}
       
       {forwardingMessage && (
         <div className="absolute inset-0 bg-black/50 z-40 flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm overflow-hidden flex flex-col">
-            <div className="px-4 py-3 border-b border-slate-100 flex items-center justify-between bg-slate-50">
-              <h3 className="font-semibold text-slate-800">Forward Message</h3>
-              <button onClick={() => { setForwardingMessage(null); setForwardSelectedIds([]); }} className="text-slate-400 hover:text-slate-600 bg-white rounded-full p-1 shadow-sm"><X size={16} /></button>
+          <div className="bg-[var(--app-surface)] rounded-2xl shadow-xl w-full max-w-sm overflow-hidden flex flex-col">
+            <div className="px-4 py-3 border-b border-[var(--app-border)] flex items-center justify-between bg-[var(--app-bg)]">
+              <h3 className="font-semibold text-[var(--app-text)]">Forward Message</h3>
+              <button onClick={() => { setForwardingMessage(null); setForwardSelectedIds([]); }} className="text-slate-400 hover:text-[var(--app-muted)] bg-[var(--app-surface)] rounded-full p-1 shadow-sm"><X size={16} /></button>
             </div>
             <div className="p-3">
               <div className="relative">
@@ -1256,7 +1260,7 @@ export default function ChatWindow({
                   value={forwardSearchQuery} 
                   onChange={e => setForwardSearchQuery(e.target.value)} 
                   placeholder="Search chats..." 
-                  className="w-full pl-9 pr-3 py-2 text-sm bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:border-sky-400"
+                  className="w-full pl-9 pr-3 py-2 text-sm bg-[var(--app-bg)] border border-[var(--app-border)] rounded-lg focus:outline-none focus:border-sky-400"
                 />
               </div>
             </div>
@@ -1267,20 +1271,20 @@ export default function ChatWindow({
                   <button
                     key={c.id}
                     onClick={() => setForwardSelectedIds(prev => isSelected ? prev.filter(id => id !== c.id) : [...prev, c.id])}
-                    className={`w-full flex items-center gap-3 p-2 rounded-xl transition-colors ${isSelected ? 'bg-sky-50' : 'hover:bg-slate-50'}`}
+                    className={`w-full flex items-center gap-3 p-2 rounded-xl transition-colors ${isSelected ? 'bg-sky-50' : 'hover:bg-[var(--app-border)]'}`}
                   >
-                    <div className="w-10 h-10 rounded-full overflow-hidden shrink-0 relative bg-gray-100">
+                    <div className="w-10 h-10 rounded-full overflow-hidden shrink-0 relative bg-[var(--app-bg)]">
                       <AppImage src={c.avatar} alt={c.avatarAlt} width={40} height={40} className="w-full h-full object-cover" />
                       {isSelected && <div className="absolute inset-0 bg-sky-500/80 flex items-center justify-center text-white"><Check size={16} /></div>}
                     </div>
                     <div className="flex-1 text-left min-w-0">
-                      <p className={`text-sm truncate ${isSelected ? 'font-semibold text-sky-900' : 'font-medium text-slate-800'}`}>{c.name}</p>
+                      <p className={`text-sm truncate ${isSelected ? 'font-semibold text-sky-900' : 'font-medium text-[var(--app-text)]'}`}>{c.name}</p>
                     </div>
                   </button>
                 )
               })}
             </div>
-            <div className="p-3 border-t border-slate-100 bg-slate-50">
+            <div className="p-3 border-t border-[var(--app-border)] bg-[var(--app-bg)]">
               <button
                 disabled={forwardSelectedIds.length === 0}
                 onClick={handleForwardMessage}
@@ -1329,7 +1333,7 @@ function MessageBubble({
             <AppImage src={senderAvatar} alt={senderAvatarAlt} width={28} height={28} className="w-full h-full object-cover" />
           ) : (
             <div className="w-full h-full bg-gray-200 flex items-center justify-center">
-              <span className="text-xs font-semibold text-gray-500">
+              <span className="text-xs font-semibold text-[var(--app-muted)]">
                 {senderName?.charAt(0) ?? '?'}
               </span>
             </div>
@@ -1356,7 +1360,7 @@ function MessageBubble({
 
         {/* Reply-to preview */}
         {message.replyToMessage && (
-          <div className={`text-xs px-3 py-1.5 rounded-lg border-l-2 mb-0.5 ${isMine ? 'bg-sky-600/30 border-white/40 text-sky-100' : 'bg-gray-100 border-sky-400 text-gray-600'}`}>
+          <div className={`text-xs px-3 py-1.5 rounded-lg border-l-2 mb-0.5 ${isMine ? 'bg-sky-600/30 border-white/40 text-sky-100' : 'bg-[var(--app-bg)] border-sky-400 text-[var(--app-muted)]'}`}>
             <span className="font-semibold">{message.replyToMessage.senderName}</span>
             <p className="truncate max-w-[200px]">{message.replyToMessage.text}</p>
           </div>
@@ -1364,7 +1368,7 @@ function MessageBubble({
 
         {message.type === 'image' ? (
           <div className={`p-1.5 rounded-2xl shadow-sm border ${
-            isMine ? 'message-bubble-sent border-sky-700/80' : 'message-bubble-received border-slate-200'
+            isMine ? 'message-bubble-sent border-sky-700/80' : 'message-bubble-received border-[var(--app-border)]'
           }`}>
             {attachmentUrl ? (
               <>
@@ -1389,7 +1393,7 @@ function MessageBubble({
                     href={attachmentUrl}
                     download={attachmentName}
                     className={`inline-flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1 rounded-md ${
-                      isMine ? 'bg-white/20 text-white hover:bg-white/30' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+                      isMine ? 'bg-[var(--app-surface)]/20 text-white hover:bg-[var(--app-surface)]/30' : 'bg-[var(--app-bg)] text-[var(--app-text)] hover:bg-slate-200'
                     }`}
                   >
                     <Download size={12} />
@@ -1398,7 +1402,7 @@ function MessageBubble({
                 </div>
               </>
             ) : (
-              <div className={`w-[220px] h-[220px] rounded-xl p-2 flex items-center justify-center text-xs ${isMine ? 'bg-white/20 text-white' : 'bg-slate-200 text-slate-600'}`}>
+              <div className={`w-[220px] h-[220px] rounded-xl p-2 flex items-center justify-center text-xs ${isMine ? 'bg-[var(--app-surface)]/20 text-white' : 'bg-slate-200 text-[var(--app-muted)]'}`}>
                 Image unavailable
               </div>
             )}
@@ -1408,12 +1412,12 @@ function MessageBubble({
             isMine ? 'message-bubble-sent' : 'message-bubble-received'
           }`}>
             <div className={`w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0 ${
-              isMine ? 'bg-white/20' : 'bg-sky-50'
+              isMine ? 'bg-[var(--app-surface)]/20' : 'bg-sky-50'
             }`}>
               <FileText size={16} className={isMine ? 'text-white' : 'text-sky-600'} />
             </div>
             <div>
-              <p className={`text-xs font-semibold ${isMine ? 'text-white' : 'text-gray-800'}`}>
+              <p className={`text-xs font-semibold ${isMine ? 'text-white' : 'text-[var(--app-text)]'}`}>
                 <HighlightedText text={message.fileName} query={chatSearchQuery} />
               </p>
               <p className={`text-xs ${isMine ? 'text-sky-100' : 'text-gray-400'}`}>
@@ -1425,7 +1429,7 @@ function MessageBubble({
                     href={attachmentUrl}
                     download={attachmentName}
                     className={`inline-flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1 rounded-md ${
-                      isMine ? 'bg-white/20 text-white hover:bg-white/30' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+                      isMine ? 'bg-[var(--app-surface)]/20 text-white hover:bg-[var(--app-surface)]/30' : 'bg-[var(--app-bg)] text-[var(--app-text)] hover:bg-slate-200'
                     }`}
                   >
                     <Download size={12} />
@@ -1445,10 +1449,10 @@ function MessageBubble({
                   {message.callType === 'video' ? <Video size={14} /> : <Phone size={14} />}
                 </div>
                 <div className="flex flex-col flex-1">
-                  <span className="text-xs font-semibold text-gray-800">
+                  <span className="text-xs font-semibold text-[var(--app-text)]">
                     {message.callStatus === 'missed' ? 'Missed call' : message.callStatus === 'cancelled' ? 'Cancelled call' : 'Call ended'}
                   </span>
-                  <span className="text-[10px] text-gray-500">
+                  <span className="text-[10px] text-[var(--app-muted)]">
                     {message.callStatus === 'missed' ? message.timestamp : message.duration || '0s'}
                   </span>
                 </div>
@@ -1456,7 +1460,7 @@ function MessageBubble({
               <button
                 type="button"
                 onClick={onStartCall}
-                className="w-8 h-8 rounded-full bg-white hover:bg-sky-50 shadow-sm border border-gray-200 flex items-center justify-center text-sky-600 transition-colors shrink-0"
+                className="w-8 h-8 rounded-full bg-[var(--app-surface)] hover:bg-sky-50 shadow-sm border border-[var(--app-border)] flex items-center justify-center text-sky-600 transition-colors shrink-0"
                 title={`Call back (${message.callType})`}
               >
                 {message.callType === 'video' ? <Video size={14} /> : <Phone size={14} />}
@@ -1470,23 +1474,23 @@ function MessageBubble({
             <button onClick={() => {
               const audio = new Audio(attachmentUrl);
               audio.play();
-            }} className={`w-8 h-8 flex items-center justify-center rounded-full flex-shrink-0 ${isMine ? 'bg-white text-sky-600' : 'bg-sky-100 text-sky-600'}`}>
+            }} className={`w-8 h-8 flex items-center justify-center rounded-full flex-shrink-0 ${isMine ? 'bg-[var(--app-surface)] text-sky-600' : 'bg-sky-100 text-sky-600'}`}>
               <Mic size={14} />
             </button>
             <div className="flex-1">
               <div className="flex items-center gap-1 h-6">
-                {(message.waveform?.length ? message.waveform.slice(0, 20) : Array.from({length: 20}, () => Math.random())).map((w, i) => (
-                  <div key={i} className={`w-1 rounded-full ${isMine ? 'bg-white/60' : 'bg-slate-300'}`} style={{ height: `${Math.max(20, w * 100)}%` }} />
+                {getVoiceWaveform(message.waveform).map((w, i) => (
+                  <div key={i} className={`w-1 rounded-full ${isMine ? 'bg-[var(--app-surface)]/60' : 'bg-slate-300'}`} style={{ height: `${Math.max(20, w * 100)}%` }} />
                 ))}
               </div>
             </div>
-            <span className={`text-[10px] font-medium ${isMine ? 'text-sky-100' : 'text-slate-500'}`}>{message.duration || '0:00'}</span>
+            <span className={`text-[10px] font-medium ${isMine ? 'text-sky-100' : 'text-[var(--app-muted)]'}`}>{message.duration || '0:00'}</span>
           </div>
         ) : (
           <div className={`px-4 py-2.5 shadow-sm ${
             isMine ? 'message-bubble-sent' : 'message-bubble-received'
           }`}>
-            <p className={`text-sm leading-relaxed ${isMine ? 'text-white' : 'text-gray-800'}`}>
+            <p className={`text-sm leading-relaxed ${isMine ? 'text-white' : 'text-[var(--app-text)]'}`}>
               <HighlightedText text={message.text} query={chatSearchQuery} />
             </p>
           </div>
@@ -1503,7 +1507,7 @@ function MessageBubble({
                   key={`reaction-${emoji}`}
                   onClick={() => onReact?.(emoji)}
                   className={`inline-flex items-center gap-1 text-xs px-1.5 py-0.5 rounded-full border transition-colors ${
-                    iReacted ? 'bg-sky-50 border-sky-200 text-sky-700' : 'bg-gray-50 border-gray-200 text-gray-600 hover:bg-gray-100'
+                    iReacted ? 'bg-sky-50 border-sky-200 text-sky-700' : 'bg-[var(--app-bg)] border-[var(--app-border)] text-[var(--app-muted)] hover:bg-[var(--app-border)]'
                   }`}
                 >
                   <span>{emoji}</span>
@@ -1535,18 +1539,18 @@ function MessageBubble({
         <button
           type="button"
           onClick={() => { setShowActions((prev) => !prev); setShowReactPicker(false); }}
-          className="w-6 h-6 rounded-full flex items-center justify-center text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-colors"
+          className="w-6 h-6 rounded-full flex items-center justify-center text-slate-400 hover:text-[var(--app-muted)] hover:bg-[var(--app-border)] transition-colors"
           title="Message actions"
         >
           <ChevronDown size={14} />
         </button>
 
         {showActions && (
-          <div className={`absolute z-20 mt-1 w-48 rounded-xl border border-slate-200 bg-white shadow-lg p-1 ${isMine ? 'right-0' : 'left-0'}`}>
+          <div className={`absolute z-20 mt-1 w-48 rounded-xl border border-[var(--app-border)] bg-[var(--app-surface)] shadow-lg p-1 ${isMine ? 'right-0' : 'left-0'}`}>
             <button
               type="button"
               onClick={() => { setShowActions(false); onCopyMessage?.(); }}
-              className="w-full flex items-center gap-2 px-3 py-2 text-sm text-slate-700 hover:bg-slate-50 rounded-lg"
+              className="w-full flex items-center gap-2 px-3 py-2 text-sm text-[var(--app-text)] hover:bg-[var(--app-border)] rounded-lg"
             >
               <Copy size={14} />
               Copy
@@ -1555,7 +1559,7 @@ function MessageBubble({
               <button
                 type="button"
                 onClick={() => { setShowActions(false); onForward?.(); }}
-                className="w-full flex items-center gap-2 px-3 py-2 text-sm text-slate-700 hover:bg-slate-50 rounded-lg"
+                className="w-full flex items-center gap-2 px-3 py-2 text-sm text-[var(--app-text)] hover:bg-[var(--app-border)] rounded-lg"
               >
                 <Reply size={14} className="scale-x-[-1]" />
                 Forward
@@ -1566,13 +1570,13 @@ function MessageBubble({
               <button
                 type="button"
                 onClick={() => setShowReactPicker((prev) => !prev)}
-                className="w-full flex items-center gap-2 px-3 py-2 text-sm text-slate-700 hover:bg-slate-50 rounded-lg"
+                className="w-full flex items-center gap-2 px-3 py-2 text-sm text-[var(--app-text)] hover:bg-[var(--app-border)] rounded-lg"
               >
                 <Smile size={14} />
                 React
               </button>
               {showReactPicker && (
-                <div className="flex gap-1 px-3 py-1.5 bg-slate-50 rounded-lg mb-1">
+                <div className="flex gap-1 px-3 py-1.5 bg-[var(--app-bg)] rounded-lg mb-1">
                   {EMOJI_LIST.map((emoji) => (
                     <button
                       key={`react-${emoji}`}
@@ -1590,7 +1594,7 @@ function MessageBubble({
               <button
                 type="button"
                 onClick={() => { setShowActions(false); onEditMessage?.(); }}
-                className="w-full flex items-center gap-2 px-3 py-2 text-sm text-slate-700 hover:bg-slate-50 rounded-lg"
+                className="w-full flex items-center gap-2 px-3 py-2 text-sm text-[var(--app-text)] hover:bg-[var(--app-border)] rounded-lg"
               >
                 <Pencil size={14} />
                 Edit
@@ -1599,7 +1603,7 @@ function MessageBubble({
             <button
               type="button"
               onClick={() => { setShowActions(false); onDeleteForMe?.(); }}
-              className="w-full flex items-center gap-2 px-3 py-2 text-sm text-slate-700 hover:bg-slate-50 rounded-lg"
+              className="w-full flex items-center gap-2 px-3 py-2 text-sm text-[var(--app-text)] hover:bg-[var(--app-border)] rounded-lg"
             >
               <Trash2 size={14} />
               Delete for me
@@ -1669,16 +1673,33 @@ function MessageStatus({ status }) {
 
 function HighlightedText({ text, query }) {
   if (!query || !text) return text;
-  try {
-    const parts = text.split(new RegExp(`(${query.replace(/[-[\]{}()*+?.,\\\\^$|#\\s]/g, '\\\\$&')})`, 'gi'));
-    return (
-      <>
-        {parts.map((part, i) => 
-          part.toLowerCase() === query.toLowerCase() ? <mark key={i} className="bg-yellow-300 text-slate-900 rounded-[2px] px-0.5">{part}</mark> : part
-        )}
-      </>
-    );
-  } catch(e) {
+
+  const escapedQuery = query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  if (!escapedQuery) {
     return text;
   }
+
+  const parts = text.split(new RegExp(`(${escapedQuery})`, 'gi'));
+  return (
+    <>
+      {parts.map((part, i) =>
+        part.toLowerCase() === query.toLowerCase()
+          ? <mark key={i} className="bg-yellow-300 text-[var(--app-text)] rounded-[2px] px-0.5">{part}</mark>
+          : part
+      )}
+    </>
+  );
+}
+
+function getVoiceWaveform(waveform = []) {
+  if (Array.isArray(waveform) && waveform.length) {
+    return waveform.slice(0, 20);
+  }
+
+  return [
+    0.35, 0.6, 0.42, 0.75, 0.5,
+    0.88, 0.48, 0.7, 0.38, 0.62,
+    0.8, 0.45, 0.58, 0.72, 0.4,
+    0.66, 0.52, 0.84, 0.46, 0.56,
+  ];
 }
